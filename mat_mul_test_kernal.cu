@@ -1,27 +1,84 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include <stdio.h>
-#include<iostream>
-#include<chrono>
+#include <iostream>
+#include <chrono>
 using namespace std;
 using namespace std::chrono;
 
+#define IMUL(a,b) __mul24(a,b)
+
 cudaError_t performNormalMatrixMultiplication();
 
-__global__ void multiply(float *dev_a, float *dev_x, float *dev_b)
+
+__device__ __forceinline__ float multBandedMatrixVectorRow(
+	const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, const float *x,
+	int idx, int2 pos, int2 dim)
+{
+	float res = 0.f;
+
+
+	res += A2[idx] * x[idx];
+
+	// left, right
+	if (pos.x > 0)
+		res += A1[idx] * x[idx - 1];
+	if (pos.x < dim.x - 1)
+		res += A3[idx] * x[idx + 1];
+
+	// up, down
+	if (pos.y > 0)
+		res += A0[idx] * x[idx - dim.x];
+	if (pos.y < dim.y - 1)
+		res += A4[idx] * x[idx + dim.x];
+	//#endif
+	return res;
+}
+
+
+
+__global__ void multiply(float *dev_a, float *dev_x, float *dev_b, int stride)
 {
 	int index = threadIdx.x + blockDim.x * blockIdx.x;
-	dev_b[index] = dev_a[index] * dev_x[index]; //Row multiplication of matrix A with vector x
+	//Row multiplication of matrix A with vector x
+	for (int i = 0; i < stride; i++) {
+		dev_b[index] = dev_a[i + (index * stride)] * dev_x[index];
+	}
+}
+
+template<bool addResult, typename Real>
+__global__ void multMatrix_kernel(const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, int2 dim, const Real * x, Real * y)
+{
+	int2 pos;
+
+	pos.x = IMUL(blockIdx.x, blockDim.x) + threadIdx.x;
+	pos.y = IMUL(blockIdx.y, blockDim.y) + threadIdx.y;
+
+	int idx = pos.x + IMUL(pos.y, dim.x);
+	//int tdx = IMUL(threadIdx.y, blockDim.x) + threadIdx.x;
+
+	if (pos.x > 0 && pos.x < dim.x - 1 && pos.y > 0 && pos.y < dim.y - 1)
+	{
+		Real sum = multBandedMatrixVectorRow(A0, A1, A2, A3, A4, x, idx, pos, dim);
+		if (addResult)
+		{
+			y[idx] += sum;
+		}
+		else
+		{
+			y[idx] = sum;
+		}
+	}
 }
 
 //Later init can be moved to GPU
-void initArrays(float *a, float *x, float *b)
+void initArrays(float *a, float *x, float *b, int size)
 {
 	int index = 0;
-	for (int i = 0; i < 32; i++) {
+	for (int i = 0; i < size; i++) {
 		x[i] = i*0.56f;
 		b[i] = 0.0f;
-		for (int j = 0; j < 32; j++) {
+		for (int j = 0; j < size; j++) {
 			a[index] = i * j * 0.045f * (index / 89); //Generating a random number and storing in a[index]
 			index++;
 		}
@@ -29,20 +86,7 @@ void initArrays(float *a, float *x, float *b)
 	}
 }
 
-void testInitilization(float *a, float *x, float *b)
-{
-	int index = 0;
-	for (int i = 0; i < 32; i++) {
-		//cout<< x[i] <<"  ";
-		//cout << b[i] << "  ";
-		for (int j = 0; j < 32; j++) {
-			//cout<<	a[index] << "  ";
-			index++;
-		}
-		cout << endl;
 
-	}
-}
 #include <memory>
 
 struct cuda_deleter
@@ -61,14 +105,16 @@ auto make_unique_cuda_array(std::size_t size)
 
 cudaError_t performNormalMatrixMultiplication()
 {
-	const int size = 32;
+	const int size = 1024;
 	//Create Matrix Vectors
 	auto c = std::make_unique<float[]>(size);//To copy final result from device to host
 	auto a = std::make_unique<float[]>(size * size); //Total elements in one matrix 32 x 32
 	auto x = std::make_unique<float[]>(size); //Vector to be multiplied
 	auto b = std::make_unique<float[]>(size); //Resultant vector
 
-	initArrays(a.get(), x.get(), b.get());
+	
+
+	initArrays(a.get(), x.get(), b.get(), size);
 
 	//testInitilization(a, x, b);
 
@@ -80,13 +126,13 @@ cudaError_t performNormalMatrixMultiplication()
 	}
 
 	//For use on Device 
-	auto dev_a = make_unique_cuda_array<float>(size);
+	auto dev_a = make_unique_cuda_array<float>(size*size);
 	auto dev_x = make_unique_cuda_array<float>(size);
 	auto dev_b = make_unique_cuda_array<float>(size);
 
 	// Copy input vectors from host memory to GPU buffers.
 	cout << "memcopy 1 \n";
-	if(auto err = cudaMemcpy(dev_a.get(), a.get(), size * sizeof(float), cudaMemcpyHostToDevice))
+	if(auto err = cudaMemcpy(dev_a.get(), a.get(), size * size * sizeof(float), cudaMemcpyHostToDevice))
 	{
 		fprintf(stderr, "cudaMemcpy failed!");
 		return err;
@@ -101,11 +147,11 @@ cudaError_t performNormalMatrixMultiplication()
 
 
 	//To refer each element of the matrix we get 32 blocks with 32 threads
-	int threads = 32;
-	int gridsize = 1;
+	int threads = 128;
+	int gridsize = 8;
 	printf("The gridsize is %d \n", gridsize);
 	high_resolution_clock::time_point t1 = high_resolution_clock::now();
-	multiply<<<gridsize, threads>>>(dev_a.get(), dev_x.get(), dev_b.get());
+	multiply<<<gridsize, threads>>>(dev_a.get(), dev_x.get(), dev_b.get(), size);
 
 	// Check for any errors launching the kernel
 	if(auto err = cudaGetLastError())
