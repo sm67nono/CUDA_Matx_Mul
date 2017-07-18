@@ -10,10 +10,10 @@ using namespace std::chrono;
 #define IMUL(a,b) __mul24(a,b)
 
 
-cudaError_t performJacobi();
+cudaError_t performMultiGPUJacobi();
 
 
-struct cuda_deleter
+/*struct cuda_deleter
 {
 	void operator() (void * p) { cudaFree(p); }
 };
@@ -25,7 +25,7 @@ auto make_unique_cuda_array(std::size_t size)
 	if (auto err = cudaMalloc((void**)&p, size * sizeof(T)))
 		throw std::bad_alloc();
 	return std::unique_ptr<T[], cuda_deleter>(p);
-}
+}*/
 
 
 //Simple Jacobi iteration
@@ -42,9 +42,9 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 
 	int leftBoundaryElem = x_pos * (dim);
 
-	int rightBoundaryElem = (x_pos * dim) +(dim-1);
+	int rightBoundaryElem = (x_pos * dim) + (dim - 1);
 
-	int topBoundaryElem = y_pos + (dim * (dim-1));
+	int topBoundaryElem = y_pos + (dim * (dim - 1));
 
 	int bottomBoundaryElem = y_pos;
 
@@ -210,12 +210,12 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 	}
 
 	//For every other element not on the boundary
-	else { 
+	else {
 		//Bottom
 		result -= A0[index] * x_in[index - dim];
 
 		//Top
-		result -= A4[index] * x_in[index + dim]; 
+		result -= A4[index] * x_in[index + dim];
 
 		//Left
 		result -= A1[index] * x_in[index - 1];
@@ -236,7 +236,7 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 
 
 //Init matrix Diagonals A0, A1, A2, A3, A4
-void initDiag(float *A0, float *A1, float *A2, float *A3, float *A4, float *res, float * vec_in, float * vec_out, int dim)
+void initDiag(float *A0, float *A1, float *A2, float *A3, float *A4, float *rhs, float * vec_in, float * vec_out, int dim)
 {
 	//Not accounted for Obstacles
 
@@ -286,29 +286,34 @@ void initDiag(float *A0, float *A1, float *A2, float *A3, float *A4, float *res,
 			}
 
 			//Primary Diagonal 
-			A2[idx] = 1.0f;
+			A2[idx] = 1.0f; // sum of A0, A1, A3, A4 ... except all 0.0... 
 
-			//Result(RHS) and Vector init
-			res[idx] = 1.0f;
-			vec_in[idx] = j+i;
+			//Result(RHS) and Vector_In
+			rhs[idx] = 1.0f;
+			vec_in[idx] = 1.0f;
 			vec_out[idx] = 0.0f;
 
 
 		}
 	}
 
+	// (i1, j1) = dimX / 4, dimY / 2
+	// (i2, j2) = 3 * dimX / 4, dimY / 2
+	// rhs[i1, j1] = +5.0
+	// rhs[i2, j2] = -5.0
+
 }
 
 
 
 
-cudaError_t performJacobi()
+cudaError_t performMultiGPUJacobi()
 {
 
 
 	//Fixed values to be changed later
 
-	const int dim = 16;
+	const int dim = 8;
 
 	const int size = dim * dim;
 
@@ -321,11 +326,11 @@ cudaError_t performJacobi()
 	auto a3 = std::make_unique<float[]>(size);
 	auto a4 = std::make_unique<float[]>(size);
 	auto vec_in = std::make_unique<float[]>(size);
-	auto res = std::make_unique<float[]>(size);
+	auto rhs = std::make_unique<float[]>(size);
 	auto vec_out = std::make_unique<float[]>(size);
 
 
-	initDiag(a0.get(), a1.get(), a2.get(), a3.get(), a4.get(), res.get(), vec_in.get(), vec_out.get(), dim);
+	initDiag(a0.get(), a1.get(), a2.get(), a3.get(), a4.get(), rhs.get(), vec_in.get(), vec_out.get(), dim);
 
 	cout << "A0             ....";
 	for (int i = 0; i < size; i++) {
@@ -356,27 +361,88 @@ cudaError_t performJacobi()
 
 	cout << "RHS             ....";
 	for (int i = 0; i < size; i++) {
-		cout << res[i] << " ";
+		cout << rhs[i] << " ";
 	}
 	cout << endl;
 
-	cout << "Vec In            ....";
-	for (int i = 0; i < size; i++) {
+	cout << "Vec In            ...." << endl;
+
+	for (int i = size - 1; i >= 0; i--) {
+
+
+		if ((i + 1) % dim == 0) { cout << endl; }
+
 		cout << vec_in[i] << " ";
 	}
 	cout << endl;
 
 
 
-	//For use on Device 
-	auto d_A0 = make_unique_cuda_array<float>(size);
+	
+
+/*  auto d_A0 = make_unique_cuda_array<float>(size);
 	auto d_A1 = make_unique_cuda_array<float>(size);
 	auto d_A2 = make_unique_cuda_array<float>(size);
 	auto d_A3 = make_unique_cuda_array<float>(size);
 	auto d_A4 = make_unique_cuda_array<float>(size);
 	auto d_Vec_In = make_unique_cuda_array<float>(size);
-	auto d_Res = make_unique_cuda_array<float>(size);
-	auto d_Vec_Out = make_unique_cuda_array<float>(size);
+	auto d_Rhs = make_unique_cuda_array<float>(size);
+	auto d_Vec_Out = make_unique_cuda_array<float>(size); */
+
+	//Get the total number of devices
+	int numDevices;
+	cudaGetDeviceCount(&numDevices);
+	cout << endl << "The total numeber of Devices: "<<numDevices;
+	//Allocate memory on the devices
+
+	//Let the total number of GPU be 2 : has to be changed later
+	//Computation divided into (size/2) on first and size-(size/2) on second
+	const int domainDivision[2] = {size/2, size-(size/2)};
+
+	//For use on Device 
+	float *d_A0[2], *d_A1[2], *d_A2[2], *d_A3[2], *d_A4[2], *d_Vec_In[2], *d_Vec_Out[2], *d_Rhs[2];
+	
+	/* The domain division is done in 1D rowise */
+	for (int dev = 0;dev<numDevices;dev++) 
+	{  
+		//Setting the device before allocation
+		cudaSetDevice(dev);
+
+		//cudamalloc the Diagonals
+		cudaMalloc((void**)&d_A0[dev], domainDivision[dev] * sizeof(float));
+		cudaMalloc((void**)&d_A1[dev], domainDivision[dev] * sizeof(float));
+		cudaMalloc((void**)&d_A2[dev], domainDivision[dev]* sizeof(float));
+		cudaMalloc((void**)&d_A3[dev], domainDivision[dev]* sizeof(float));
+		cudaMalloc((void**)&d_A4[dev], domainDivision[dev]* sizeof(float));
+
+		//cudamalloc the Input Vector and Result vector
+		cudaMalloc((void**)&d_Vec_In[dev], domainDivision[dev] * sizeof(float));
+		cudaMalloc((void**)&d_Vec_Out[dev], domainDivision[dev] * sizeof(float));
+		cudaMalloc((void**)&d_Rhs[dev], domainDivision[dev] * sizeof(float));
+	}
+
+
+
+
+	/* The transfer of Data from Host to Device */
+
+	for (int dev = 0, pos=0;dev<numDevices;pos+=domainDivision[dev],dev++)
+	{
+		//Setting the device before allocation
+		cudaSetDevice(dev);
+
+		//Copy the diagonals from host to device
+		cudaMemcpy(d_A0[dev], a0.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A1[dev], a1.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A2[dev], a2.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A3[dev], a3.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A4[dev], a4.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+
+		//Copy in and out vectors and RHS
+		cudaMemcpy(d_Vec_In[dev], vec_in.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Vec_Out[dev], vec_out.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Rhs[dev], rhs.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+	}
 
 	if (auto err = cudaGetLastError())
 	{
@@ -384,17 +450,7 @@ cudaError_t performJacobi()
 		return err;
 	}
 
-	//cudamalloc the Diagonals
-	cudaMalloc((void**)&d_A0, size * sizeof(float));
-	cudaMalloc((void**)&d_A1, size * sizeof(float));
-	cudaMalloc((void**)&d_A2, size * sizeof(float));
-	cudaMalloc((void**)&d_A3, size * sizeof(float));
-	cudaMalloc((void**)&d_A4, size * sizeof(float));
-
-	//cudamalloc the Input Vector and Result vector
-	cudaMalloc((void**)&d_Vec_In, size * sizeof(float));
-	cudaMalloc((void**)&d_Vec_Out, size * sizeof(float));
-	cudaMalloc((void**)&d_Res, size * sizeof(float));
+	
 
 	if (auto err = cudaGetLastError())
 	{
@@ -403,15 +459,7 @@ cudaError_t performJacobi()
 	}
 
 
-	cudaMemcpy(d_A0.get(), a0.get(), size * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_A1.get(), a1.get(), size * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_A2.get(), a2.get(), size * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_A3.get(), a3.get(), size * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_A4.get(), a4.get(), size * sizeof(float), cudaMemcpyHostToDevice);
-
-	cudaMemcpy(d_Vec_In.get(), vec_in.get(), size * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_Vec_Out.get(), vec_out.get(), size * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_Res.get(), res.get(), size * sizeof(float), cudaMemcpyHostToDevice);
+	
 
 	if (auto err = cudaGetLastError())
 	{
@@ -422,44 +470,68 @@ cudaError_t performJacobi()
 	//multMatrix(d_A0, d_A1, d_A2, d_A3, d_A4, myDim, d_vec, d_res);
 
 	//Perform one Jacobi Step
-	int blocksize = dim;
+	int blocksize = size/2; //TODO: make it to more than 2 GPUs
 	int threads = dim;
 
-	int iterations = 20;
-	for(int i=0;i<iterations;i++)
-	{ 
-		jacobi_Simple <<<blocksize, threads >>>(d_A0.get(), d_A1.get(), d_A2.get(), d_A3.get(), d_A4.get(), d_Vec_In.get(), d_Vec_Out.get(), d_Res.get());
-		cudaMemcpy(result.get(), d_Vec_Out.get(), size * sizeof(float), cudaMemcpyDeviceToHost);
+	//Call to kernal
+	int iterations=4;
+	for (int i = 0;i<iterations;i++)
+	{
+		for(int dev=0,pos=0;dev<numDevices;pos+=domainDivision[dev],dev++)
+		{
+			cout <<endl<< "Kernal Execution on GPU : "<<dev;
 		
+			cudaSetDevice(dev);
+			jacobi_Simple<<<blocksize, threads>>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev]);
+
+			//TODO: Currently serial has to be done cudaMemcpyAsync using CUDA Streams
+
+			//Copy the intermediate result from Device to Host memory
+			cudaMemcpy(result.get()+pos, d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+			//Copy the intermediate result from the Host memory to the Device memory
+			
+			//Print Intermediate result
+			cout << endl <<"Intermediate Result";
+
+			for (int i = domainDivision[dev]; i >= 0; i--) {
+
+
+				if ((i + 1) % dim == 0) { cout << endl; }
+
+				cout << result[i] << " ";
+			}
+
+			cudaMemcpy(d_Vec_In[dev], result.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		}
+
+		cout << endl << "Exchanging Halos";
 	}
+
 	if (auto err = cudaGetLastError())
 	{
 		fprintf(stderr, "Jacobi launch failed: %s\n", cudaGetErrorString(err));
 		return err;
 	}
 
-	cudaMemcpy(result.get(), d_Vec_Out.get(), size * sizeof(float), cudaMemcpyDeviceToHost);
+	cout << endl << "Iterations successful " << endl;
+
+	//Copy the final result from all devices
+	for (int dev = 0, pos=0; dev < numDevices;pos+=domainDivision[dev],dev++) 
+	{
+		cudaMemcpy(result.get()+pos, d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+	}
+
+
 
 	if (auto err = cudaGetLastError())
 	{
 		fprintf(stderr, "Jacobi launch failed: %s\n", cudaGetErrorString(err));
 		return err;
 	}
-
-
-	cout << "One iteration successful";
 
 	//Print result
-	for (int i= size-1; i >=0; i--) {
 
-
-		if ((i+1) % dim == 0) { cout << endl; }
-
-		cout << vec_in[i] << " ";
-	}
-
-	cout << endl << endl;
-	for (int i = size-1; i >=0; i--) {
+	for (int i = size - 1; i >= 0; i--) {
 
 
 		if ((i + 1) % dim == 0) { cout << endl; }
@@ -468,13 +540,18 @@ cudaError_t performJacobi()
 	}
 	// Freeing memory auto done by cuda deleter
 
-	/*cudaFree(d_A0.get());
-	cudaFree(d_A1.get());
-	cudaFree(d_A2.get());
-	cudaFree(d_A3.get());
-	cudaFree(d_A4.get());
-	cudaFree(d_Vec.get());
-	cudaFree(d_Res.get());*/
+	//Free memory on devices
+	for (int dev =0; dev<numDevices;dev++)
+	{
+		cudaFree(d_A0[dev]);
+		cudaFree(d_A1[dev]);
+		cudaFree(d_A2[dev]);
+		cudaFree(d_A3[dev]);
+		cudaFree(d_A4[dev]);
+		cudaFree(d_Vec_In[dev]);
+		cudaFree(d_Vec_Out[dev]);
+		cudaFree(d_Rhs[dev]);
+	}
 
 	return cudaSuccess;
 
@@ -486,7 +563,7 @@ int main()
 {
 
 
-	cudaError_t cudaStatus = performJacobi();
+	cudaError_t cudaStatus = performMultiGPUJacobi();
 
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "Computation failed! \n");
