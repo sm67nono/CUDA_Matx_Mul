@@ -477,11 +477,33 @@ cudaError_t performMultiGPUJacobi()
 	int iterations=4;
 	for (int i = 0;i<iterations;i++)
 	{
-		for(int dev=0,pos=0;dev<numDevices;pos+=domainDivision[dev],dev++)
+		cout << endl << endl <<"Iteration : "<<i+1<<endl << endl << endl;
+		for(int dev=0,pos= 0;dev<numDevices;pos+=domainDivision[dev],dev++)
 		{
 			cout <<endl<< "Kernal Execution on GPU : "<<dev;
-		
+			cout << endl << "Position :" << pos;
 			cudaSetDevice(dev);
+
+			cout << endl << "Check Intermediate Result before it gets passed to kernal" <<endl;
+
+			cudaMemcpy(result.get() + pos, d_Vec_In[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+
+			/*for (int i = domainDivision[dev]+pos-1; i>=0; i--) {
+
+
+				if ((i + 1) % dim == 0) { cout << endl; }
+
+				cout << "matrix_pos:" << i << " " << result[i] << "   ";
+			}*/
+
+			for (int i = size - 1; i >= 0; i--) {
+
+
+				if ((i + 1) % dim == 0) { cout << endl; }
+
+				cout << "matrix_pos:" << i << " " << result[i] << "   ";
+			}
+
 			jacobi_Simple<<<blocksize, threads>>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev]);
 
 			//TODO: Currently serial has to be done cudaMemcpyAsync using CUDA Streams
@@ -491,15 +513,15 @@ cudaError_t performMultiGPUJacobi()
 			//Copy the intermediate result from the Host memory to the Device memory
 			
 			//Print Intermediate result
-			cout << endl <<"Intermediate Result";
+			/* cout << endl <<"Intermediate Result";
 
 			for (int i = domainDivision[dev]; i >= 0; i--) {
 
 
 				if ((i + 1) % dim == 0) { cout << endl; }
 
-				cout << result[i] << " ";
-			}
+				cout << "position:"<<i<<" "<<result[i] << "   ";
+			}*/
 
 			cudaMemcpy(d_Vec_In[dev], result.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 		}
