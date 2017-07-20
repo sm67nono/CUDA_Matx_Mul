@@ -15,16 +15,16 @@ cudaError_t performMultiGPUJacobi();
 
 /*struct cuda_deleter
 {
-	void operator() (void * p) { cudaFree(p); }
+void operator() (void * p) { cudaFree(p); }
 };
 
 template<typename T>
 auto make_unique_cuda_array(std::size_t size)
 {
-	T * p = nullptr;
-	if (auto err = cudaMalloc((void**)&p, size * sizeof(T)))
-		throw std::bad_alloc();
-	return std::unique_ptr<T[], cuda_deleter>(p);
+T * p = nullptr;
+if (auto err = cudaMalloc((void**)&p, size * sizeof(T)))
+throw std::bad_alloc();
+return std::unique_ptr<T[], cuda_deleter>(p);
 }*/
 
 
@@ -288,7 +288,7 @@ void initDiag(float *A0, float *A1, float *A2, float *A3, float *A4, float *rhs,
 			//Primary Diagonal 
 			A2[idx] = 1.0f; // sum of A0, A1, A3, A4 ... except all 0.0... 
 
-			//Result(RHS) and Vector_In
+							//Result(RHS) and Vector_In
 			rhs[idx] = 1.0f;
 			vec_in[idx] = 1.0f;
 			vec_out[idx] = 0.0f;
@@ -313,9 +313,9 @@ cudaError_t performMultiGPUJacobi()
 
 	//Fixed values to be changed later
 
-	const int dim = 8;
+	int dim = 8;
 
-	const int size = dim * dim;
+	int size = dim * dim;
 
 	auto result = std::make_unique<float[]>(size);
 
@@ -378,9 +378,9 @@ cudaError_t performMultiGPUJacobi()
 
 
 
-	
 
-/*  auto d_A0 = make_unique_cuda_array<float>(size);
+
+	/*  auto d_A0 = make_unique_cuda_array<float>(size);
 	auto d_A1 = make_unique_cuda_array<float>(size);
 	auto d_A2 = make_unique_cuda_array<float>(size);
 	auto d_A3 = make_unique_cuda_array<float>(size);
@@ -392,28 +392,38 @@ cudaError_t performMultiGPUJacobi()
 	//Get the total number of devices
 	int numDevices;
 	cudaGetDeviceCount(&numDevices);
-	cout << endl << "The total numeber of Devices: "<<numDevices;
+	cout << endl << "The total numeber of Devices: " << numDevices;
 	//Allocate memory on the devices
 
 	//Let the total number of GPU be 2 : has to be changed later
 	//Computation divided into (size/2) on first and size-(size/2) on second
-	const int domainDivision[2] = {size/2, size-(size/2)};
+	int *domainDivision;
+	domainDivision = new int[numDevices]; 
+
+	//Logic for total chunk per device
+	for (int i = 0; i < numDevices; i++) {
+		if(!(i==numDevices-1)){
+			domainDivision[i] = size / numDevices;
+			size = (size - size / numDevices);
+		}
+	}
+	
 
 	//For use on Device 
 	float *d_A0[2], *d_A1[2], *d_A2[2], *d_A3[2], *d_A4[2], *d_Vec_In[2], *d_Vec_Out[2], *d_Rhs[2];
-	
+
 	/* The domain division is done in 1D rowise */
-	for (int dev = 0;dev<numDevices;dev++) 
-	{  
+	for (int dev = 0; dev<numDevices; dev++)
+	{
 		//Setting the device before allocation
 		cudaSetDevice(dev);
 
 		//cudamalloc the Diagonals
 		cudaMalloc((void**)&d_A0[dev], domainDivision[dev] * sizeof(float));
 		cudaMalloc((void**)&d_A1[dev], domainDivision[dev] * sizeof(float));
-		cudaMalloc((void**)&d_A2[dev], domainDivision[dev]* sizeof(float));
-		cudaMalloc((void**)&d_A3[dev], domainDivision[dev]* sizeof(float));
-		cudaMalloc((void**)&d_A4[dev], domainDivision[dev]* sizeof(float));
+		cudaMalloc((void**)&d_A2[dev], domainDivision[dev] * sizeof(float));
+		cudaMalloc((void**)&d_A3[dev], domainDivision[dev] * sizeof(float));
+		cudaMalloc((void**)&d_A4[dev], domainDivision[dev] * sizeof(float));
 
 		//cudamalloc the Input Vector and Result vector
 		cudaMalloc((void**)&d_Vec_In[dev], domainDivision[dev] * sizeof(float));
@@ -426,22 +436,22 @@ cudaError_t performMultiGPUJacobi()
 
 	/* The transfer of Data from Host to Device */
 
-	for (int dev = 0, pos=0;dev<numDevices;pos+=domainDivision[dev],dev++)
+	for (int dev = 0, pos = 0; dev<numDevices; pos += domainDivision[dev], dev++)
 	{
 		//Setting the device before allocation
 		cudaSetDevice(dev);
 
 		//Copy the diagonals from host to device
-		cudaMemcpy(d_A0[dev], a0.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_A1[dev], a1.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_A2[dev], a2.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_A3[dev], a3.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_A4[dev], a4.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A0[dev], a0.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A1[dev], a1.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A2[dev], a2.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A3[dev], a3.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_A4[dev], a4.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 
 		//Copy in and out vectors and RHS
-		cudaMemcpy(d_Vec_In[dev], vec_in.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Vec_Out[dev], vec_out.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Rhs[dev], rhs.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Vec_In[dev], vec_in.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Vec_Out[dev], vec_out.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Rhs[dev], rhs.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 	}
 
 	if (auto err = cudaGetLastError())
@@ -450,7 +460,7 @@ cudaError_t performMultiGPUJacobi()
 		return err;
 	}
 
-	
+
 
 	if (auto err = cudaGetLastError())
 	{
@@ -459,7 +469,7 @@ cudaError_t performMultiGPUJacobi()
 	}
 
 
-	
+
 
 	if (auto err = cudaGetLastError())
 	{
@@ -470,30 +480,30 @@ cudaError_t performMultiGPUJacobi()
 	//multMatrix(d_A0, d_A1, d_A2, d_A3, d_A4, myDim, d_vec, d_res);
 
 	//Perform one Jacobi Step
-	int blocksize = size/2; //TODO: make it to more than 2 GPUs
+	int blocksize = dim / numDevices; //TODO: make it to more than 2 GPUs
 	int threads = dim;
 
 	//Call to kernal
-	int iterations=4;
-	for (int i = 0;i<iterations;i++)
+	int iterations = 4;
+	for (int i = 0; i<iterations; i++)
 	{
-		cout << endl << endl <<"Iteration : "<<i+1<<endl << endl << endl;
-		for(int dev=0,pos= 0;dev<numDevices;pos+=domainDivision[dev],dev++)
+		cout << endl << endl << "Iteration : " << i + 1 << endl << endl << endl;
+		for (int dev = 0, pos = 0; dev<numDevices; pos += domainDivision[dev], dev++)
 		{
-			cout <<endl<< "Kernal Execution on GPU : "<<dev;
+			cout << endl << "Kernal Execution on GPU : " << dev;
 			cout << endl << "Position :" << pos;
 			cudaSetDevice(dev);
 
-			cout << endl << "Check Intermediate Result before it gets passed to kernal" <<endl;
+			cout << endl << "Check Intermediate Result before it gets passed to kernal" << endl;
 
 			cudaMemcpy(result.get() + pos, d_Vec_In[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
 
 			/*for (int i = domainDivision[dev]+pos-1; i>=0; i--) {
 
 
-				if ((i + 1) % dim == 0) { cout << endl; }
+			if ((i + 1) % dim == 0) { cout << endl; }
 
-				cout << "matrix_pos:" << i << " " << result[i] << "   ";
+			cout << "matrix_pos:" << i << " " << result[i] << "   ";
 			}*/
 
 			for (int i = size - 1; i >= 0; i--) {
@@ -504,26 +514,26 @@ cudaError_t performMultiGPUJacobi()
 				cout << "matrix_pos:" << i << " " << result[i] << "   ";
 			}
 
-			jacobi_Simple<<<blocksize, threads>>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev]);
+			jacobi_Simple << <blocksize, threads >> >(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev]);
 
 			//TODO: Currently serial has to be done cudaMemcpyAsync using CUDA Streams
 
 			//Copy the intermediate result from Device to Host memory
-			cudaMemcpy(result.get()+pos, d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(result.get() + pos, d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
 			//Copy the intermediate result from the Host memory to the Device memory
-			
+
 			//Print Intermediate result
 			/* cout << endl <<"Intermediate Result";
 
 			for (int i = domainDivision[dev]; i >= 0; i--) {
 
 
-				if ((i + 1) % dim == 0) { cout << endl; }
+			if ((i + 1) % dim == 0) { cout << endl; }
 
-				cout << "position:"<<i<<" "<<result[i] << "   ";
+			cout << "position:"<<i<<" "<<result[i] << "   ";
 			}*/
 
-			cudaMemcpy(d_Vec_In[dev], result.get()+pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Vec_In[dev], result.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 		}
 
 		cout << endl << "Exchanging Halos";
@@ -538,9 +548,9 @@ cudaError_t performMultiGPUJacobi()
 	cout << endl << "Iterations successful " << endl;
 
 	//Copy the final result from all devices
-	for (int dev = 0, pos=0; dev < numDevices;pos+=domainDivision[dev],dev++) 
+	for (int dev = 0, pos = 0; dev < numDevices; pos += domainDivision[dev], dev++)
 	{
-		cudaMemcpy(result.get()+pos, d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(result.get() + pos, d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
 	}
 
 
@@ -563,7 +573,7 @@ cudaError_t performMultiGPUJacobi()
 	// Freeing memory auto done by cuda deleter
 
 	//Free memory on devices
-	for (int dev =0; dev<numDevices;dev++)
+	for (int dev = 0; dev<numDevices; dev++)
 	{
 		cudaFree(d_A0[dev]);
 		cudaFree(d_A1[dev]);
@@ -574,6 +584,9 @@ cudaError_t performMultiGPUJacobi()
 		cudaFree(d_Vec_Out[dev]);
 		cudaFree(d_Rhs[dev]);
 	}
+
+	//Take care of dynamic mem location
+	delete[] domainDivision;
 
 	return cudaSuccess;
 
