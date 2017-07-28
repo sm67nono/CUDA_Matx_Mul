@@ -236,10 +236,16 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 
 
 //Init matrix Diagonals A0, A1, A2, A3, A4
-void initDiag(float *A0, float *A1, float *A2, float *A3, float *A4, float *rhs, float * vec_in, float * vec_out, int dim)
+void initDiag(float *A0, float *A1, float *A2, float *A3, float *A4, float *rhs, float * vec_in, float * vec_out, int dim, float *halos, int numDevices)
 {
-	//Not accounted for Obstacles
 
+
+	int halocounter = 0;
+	int haloOffset = 0;
+	int haloDivision = dim / numDevices; // In 1D
+
+	//Not accounted for Obstacles
+	
 	for (int i = 0; i < dim; ++i)
 	{
 		for (int j = 0; j < dim; ++j)
@@ -294,7 +300,28 @@ void initDiag(float *A0, float *A1, float *A2, float *A3, float *A4, float *rhs,
 			vec_out[idx] = 0.0f;
 
 
+
+
+
+			//Initial value of Halos should be same as vec_in
+			//For GPU 1 the halo should be top row(North) of domain in GPU 2
+			if(i==haloOffset){
+				halos[halocounter] = halocounter; //vec_in[idx]
+				halocounter++;
+				
+			}
+			//For GPU 2 the halo should be bottom row(South) of domain in GPU 1
+			if (i == (haloOffset - 1))
+			{
+				halos[halocounter] = halocounter; //vec_in[idx]
+				halocounter++;
+				
+			}
+			
+
+
 		}
+		haloOffset += haloDivision;
 	}
 
 	// (i1, j1) = dimX / 4, dimY / 2
@@ -315,6 +342,7 @@ cudaError_t performMultiGPUJacobi()
 
 	int dim = 8;
 
+	//TODO: write a 2D domain decomposition method for more than 2 GPUs
 	int size = dim * dim;
 
 	auto result = std::make_unique<float[]>(size);
@@ -330,7 +358,19 @@ cudaError_t performMultiGPUJacobi()
 	auto vec_out = std::make_unique<float[]>(size);
 
 
-	initDiag(a0.get(), a1.get(), a2.get(), a3.get(), a4.get(), rhs.get(), vec_in.get(), vec_out.get(), dim);
+	//Get the total number of devices
+	int numDevices;
+	cudaGetDeviceCount(&numDevices);
+
+
+	//For both the GPUs - One halo per device(for 2 GPUs down and up halos are needed) : TODO: division when exchanging with more than 2 GPUs
+	//For 4 GPUs up, down, left right would be needed (1*dim  must be changed to 4 * dim)
+	//1*dim*numDevices calculates total storage space needed for Halos 1:-Total halos needed per device. dim:-number of elements in the dimension
+	int haloStorage = 1 * dim * numDevices;
+	auto halos = std::make_unique<float[]>(haloStorage);
+
+
+	initDiag(a0.get(), a1.get(), a2.get(), a3.get(), a4.get(), rhs.get(), vec_in.get(), vec_out.get(), dim, halos.get(),numDevices);
 
 	cout << "A0             ....";
 	for (int i = 0; i < size; i++) {
@@ -365,6 +405,12 @@ cudaError_t performMultiGPUJacobi()
 	}
 	cout << endl;
 
+	cout << "Halos             ....";
+	for (int i = 0; i < haloStorage; i++) {
+		cout << halos[i] << " ";
+	}
+	cout << endl;
+
 	cout << "Vec In            ...." << endl;
 
 	for (int i = size - 1; i >= 0; i--) {
@@ -389,9 +435,7 @@ cudaError_t performMultiGPUJacobi()
 	auto d_Rhs = make_unique_cuda_array<float>(size);
 	auto d_Vec_Out = make_unique_cuda_array<float>(size); */
 
-	//Get the total number of devices
-	int numDevices;
-	cudaGetDeviceCount(&numDevices);
+	
 	cout << endl << "The total numeber of Devices: " << numDevices;
 	//Allocate memory on the devices
 
@@ -400,17 +444,19 @@ cudaError_t performMultiGPUJacobi()
 	int *domainDivision;
 	domainDivision = new int[numDevices]; 
 
-	//Logic for total chunk per device
+
+
+	//Logic for total chunk per device (Domain distribution)
 	for (int i = 0; i < numDevices; i++) {
-		if(!(i==numDevices-1)){
+		//if(!(i==numDevices-1)){
 			domainDivision[i] = size / numDevices;
-			size = (size - size / numDevices);
-		}
+			//size = (size - size / numDevices);
+		//}
 	}
-	
+
 
 	//For use on Device 
-	float *d_A0[2], *d_A1[2], *d_A2[2], *d_A3[2], *d_A4[2], *d_Vec_In[2], *d_Vec_Out[2], *d_Rhs[2];
+	float *d_A0[2], *d_A1[2], *d_A2[2], *d_A3[2], *d_A4[2], *d_Vec_In[2], *d_Vec_Out[2], *d_Rhs[2], *d_halos[2];
 
 	/* The domain division is done in 1D rowise */
 	for (int dev = 0; dev<numDevices; dev++)
@@ -429,6 +475,9 @@ cudaError_t performMultiGPUJacobi()
 		cudaMalloc((void**)&d_Vec_In[dev], domainDivision[dev] * sizeof(float));
 		cudaMalloc((void**)&d_Vec_Out[dev], domainDivision[dev] * sizeof(float));
 		cudaMalloc((void**)&d_Rhs[dev], domainDivision[dev] * sizeof(float));
+
+		//cudaMalloc Halos
+		cudaMalloc((void**)&d_halos[dev], dim * sizeof(float));
 	}
 
 
@@ -436,7 +485,7 @@ cudaError_t performMultiGPUJacobi()
 
 	/* The transfer of Data from Host to Device */
 
-	for (int dev = 0, pos = 0; dev<numDevices; pos += domainDivision[dev], dev++)
+	for (int dev = 0, pos = 0, haloPos =0; dev<numDevices; pos += domainDivision[dev], haloPos+=dim, dev++)
 	{
 		//Setting the device before allocation
 		cudaSetDevice(dev);
@@ -452,6 +501,9 @@ cudaError_t performMultiGPUJacobi()
 		cudaMemcpy(d_Vec_In[dev], vec_in.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMemcpy(d_Vec_Out[dev], vec_out.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 		cudaMemcpy(d_Rhs[dev], rhs.get() + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+
+		//Copy intial Halos : TODO more than 2 devices
+		cudaMemcpy(d_halos[dev], halos.get() + haloPos, dim * sizeof(float), cudaMemcpyHostToDevice);
 	}
 
 	if (auto err = cudaGetLastError())
