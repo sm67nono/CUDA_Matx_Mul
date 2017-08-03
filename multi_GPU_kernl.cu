@@ -456,7 +456,19 @@ cudaError_t performMultiGPUJacobi()
 
 
 	//For use on Device 
-	float *d_A0[2], *d_A1[2], *d_A2[2], *d_A3[2], *d_A4[2], *d_Vec_In[2], *d_Vec_Out[2], *d_Rhs[2], *d_halos[2];
+	float *d_A0, *d_A1, *d_A2, *d_A3, *d_A4, *d_Vec_In, *d_Vec_Out, *d_Rhs, *d_halos;
+	
+	d_A0 = new float[numDevices]; 
+	d_A1 = new float[numDevices];
+	d_A2 = new float[numDevices];
+	d_A3 = new float[numDevices];
+	d_A4 = new float[numDevices];
+	d_Vec_In = new float[numDevices];
+	d_Vec_Out = new float[numDevices];
+	d_Rhs = new float[numDevices];
+	d_halos = new float[numDevices];		
+	
+	
 
 	/* The domain division is done in 1D rowise */
 	for (int dev = 0; dev<numDevices; dev++)
@@ -634,6 +646,7 @@ cudaError_t performMultiGPUJacobi()
 		cudaFree(d_A4[dev]);
 		cudaFree(d_Vec_In[dev]);
 		cudaFree(d_Vec_Out[dev]);
+		cudaFree(d_halos[dev]);
 		cudaFree(d_Rhs[dev]);
 	}
 
