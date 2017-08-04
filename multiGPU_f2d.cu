@@ -44,7 +44,7 @@ struct create_DeviceHalos
 };
 
 //Simple Jacobi iteration
-__global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, float *x_in, float *x_out, const float *rhs)
+__global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, float *x_in, float *x_out, const float *rhs, const float *nhalo, const float *shalo, const int deviceID)
 {
 	int index = threadIdx.x + blockDim.x * blockIdx.x;
 	float result = rhs[index];
@@ -54,6 +54,7 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 	int x_pos = blockIdx.x;
 	int y_pos = threadIdx.x;
 
+	//result = result+nhalo[y_pos];
 	//Get the boundaries
 
 	int leftBoundaryElem = x_pos * (dim);
@@ -253,7 +254,6 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 //In 3D decomposition North, South, East , West, Top and Bottom needs to be initialized and computed
 void initHalos(int numDevices, vector<create_DeviceHalos> &deviceArray, int dim_x, float *vec_in) {
 
-	if (numDevices == 1) { return; };
 
 	deviceArray.resize(numDevices);
 	int chunksize = ((dim_x*dim_x) / numDevices);
@@ -266,6 +266,17 @@ void initHalos(int numDevices, vector<create_DeviceHalos> &deviceArray, int dim_
 		//TODO: deviceArray[i].eHalo.resize(dim_x);
 		//TODO: deviceArray[i].wHalo.resize(dim_x);
 		deviceArray[i].sHalo.resize(dim_x);
+
+		if (numDevices == 1)
+		{
+			for (int count = 0;count<dim_x;count++)
+			{
+				
+				deviceArray[i].nHalo[count] = 1.0f;
+				deviceArray[i].sHalo[count] = 1.0f;
+			}
+			return;
+		}
 
 		//First Device needs only nHalo
 		if (i == 0)
@@ -609,7 +620,8 @@ cudaError_t performMultiGPUJacobi()
 		*d_Vec_In[4],
 		*d_Vec_Out[4],
 		*d_Rhs[4],
-		*d_halos[4];
+		*d_nhalos[4],
+		*d_shalos[4];
 
 	/*d_A0 = new float[numDevices];
 	d_A1 = new float[numDevices];
@@ -641,8 +653,9 @@ cudaError_t performMultiGPUJacobi()
 		cudaMalloc((void**)&d_Vec_Out[dev], domainDivision[dev] * sizeof(float));
 		cudaMalloc((void**)&d_Rhs[dev], domainDivision[dev] * sizeof(float));
 
-		//cudaMalloc Halos
-		cudaMalloc((void**)&d_halos[dev], dim * sizeof(float));
+		//cudaMalloc Halos: North and South--1D. TODO: East and West for 2D
+		cudaMalloc((void**)&d_nhalos[dev], dim * sizeof(float));
+		cudaMalloc((void**)&d_shalos[dev], dim * sizeof(float));
 	}
 
 
@@ -650,7 +663,7 @@ cudaError_t performMultiGPUJacobi()
 
 	/* The transfer of Data from Host to Device */
 
-	for (int dev = 0, pos = 0, haloPos = 0; dev<numDevices; pos += domainDivision[dev], haloPos += dim, dev++)
+	for (int dev = 0, pos = 0; dev<numDevices; pos += domainDivision[dev], dev++)
 	{
 		//Setting the device before allocation
 		cudaSetDevice(dev);
@@ -668,10 +681,21 @@ cudaError_t performMultiGPUJacobi()
 		cudaMemcpy(d_Rhs[dev], &rhs[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 
 		//Copy intial Halos in 1D : TODO compute more than 1D
-		//cudaMemcpy(dev_nhalos[dev], &deviceArray. + haloPos, dim * sizeof(float), cudaMemcpyHostToDevice);
-		//cudaMemcpy(dev_shalos[dev], &halos[0] + haloPos, dim * sizeof(float), cudaMemcpyHostToDevice);
-		//cudaMemcpy(d_halos[dev], &halos[0] + haloPos, dim * sizeof(float), cudaMemcpyHostToDevice);
 
+		
+		if(dev==0){
+			cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo, dim * sizeof(float), cudaMemcpyHostToDevice); 
+		}
+		else if(dev==(numDevices-1)){
+			cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo, dim * sizeof(float), cudaMemcpyHostToDevice);
+		}
+		else {
+			cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo, dim * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo, dim * sizeof(float), cudaMemcpyHostToDevice);
+		}
+		
+
+		
 	}
 
 	if (auto err = cudaGetLastError())
@@ -734,7 +758,7 @@ cudaError_t performMultiGPUJacobi()
 				cout << "#pos:" << i << " " << result[i] << "    ";
 			}
 
-			jacobi_Simple <<<blocksize, threads >>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev]);
+			jacobi_Simple <<<blocksize, threads >>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID);
 
 			//TODO: Currently serial has to be done cudaMemcpyAsync using CUDA Streams
 
@@ -803,7 +827,8 @@ cudaError_t performMultiGPUJacobi()
 		cudaFree(d_A4[dev]);
 		cudaFree(d_Vec_In[dev]);
 		cudaFree(d_Vec_Out[dev]);
-		cudaFree(d_halos[dev]);
+		cudaFree(d_nhalos[dev]);
+		cudaFree(d_shalos[dev]);
 		cudaFree(d_Rhs[dev]);
 	}
 
