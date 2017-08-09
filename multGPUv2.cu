@@ -442,8 +442,9 @@ cudaError_t performMultiGPUJacobi()
 	std::vector<float> rhs(size);
 	std::vector<float> result(size);
 
-	
-
+	//Used for exchanging the Halos after each Jacobi Iteration
+	std::vector<float> prev_nHalo(dim);
+	std::vector<float> curr_sHalo(dim);
 
 	//Get the total number of devices
 	int numDevices;
@@ -461,14 +462,14 @@ cudaError_t performMultiGPUJacobi()
 	vector<create_DeviceHalos> deviceArray;
 
 	/* Distributed Compuation using Halos: Algorithm
-	
+
 	1. Init Halos.
-	 1.a) In 1D decomposition nhalo and shalo intialized from vector x_in
-	 1.b) In 2D decompsition nhalo,shalo, ehalo and whalo initialozed from vector x_in
+	1.a) In 1D decomposition nhalo and shalo intialized from vector x_in
+	1.b) In 2D decompsition nhalo,shalo, ehalo and whalo initialozed from vector x_in
 	2. Pass the halos to Jacobi_kernal.
 	3. Store the result computed at the boundary into the halo boundary positions.
 	4. Swap nhalo and shalo pairs in 1D decompostion. Swap (nhalo,shalo) and (ehalo,whalo) in 2D.
-	
+
 	*/
 
 	initHalos(numDevices, deviceArray, dim, &vec_in[0]);
@@ -729,7 +730,10 @@ cudaError_t performMultiGPUJacobi()
 	int iterations = 4;
 	for (int i = 0; i<iterations; i++)
 	{
+
 		cout << endl << endl << "Iteration : " << i + 1 << endl << endl << endl;
+
+		//TODO: optimization using kernel instead of For Loop
 		for (int dev = 0, pos = 0; dev<numDevices; pos += domainDivision[dev], dev++)
 		{
 			cout << endl << endl << "Kernal Execution on GPU : " << dev;
@@ -757,17 +761,28 @@ cudaError_t performMultiGPUJacobi()
 			//Copy the intermediate result from the Host memory to the Device memory
 			cudaMemcpy(d_Vec_In[dev], &result[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 
-			
-			/*Swap positions after iteration*/
-			if (dev == 0) {
-				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyDeviceToHost);
-			}
-			else if (dev == (numDevices - 1)) {
-				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyDeviceToHost);
-			}
-			else {
-				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyDeviceToHost);
-				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyDeviceToHost);
+
+			/* Store Halo positions after iteration for exchanging */
+			if (numDevices>1)
+			{
+				if (dev == 0) {
+					cudaMemcpy(&prev_nHalo[0], d_nhalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
+				}
+				else if (dev == (numDevices - 1)) {
+					//Exchange Happens here
+					cudaMemcpy(&curr_sHalo[0], d_shalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
+					cudaMemcpy(d_shalos[dev], &prev_nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+					cudaMemcpy(d_nhalos[dev-1], &curr_sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+
+				}
+				else {
+					//Exchange Happens here
+					cudaMemcpy(&curr_sHalo[0], d_shalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
+					cudaMemcpy(d_shalos[dev], &prev_nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+					cudaMemcpy(d_nhalos[dev - 1], &curr_sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+					//Store current North Boundary in prev_halo for exchanging in later step
+					cudaMemcpy(&prev_nHalo[0], d_nhalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
+				}
 			}
 
 
