@@ -248,8 +248,8 @@ void generateGPUGRID(unsigned int numDevices, int &numberOfDevicesAlong_X, int &
 {
 	//Finding GPU topology along x and y
 	//Assumuing total number of devices is a perfect square(To be changed later)
-	numberOfDevicesAlong_X = sqrt(numDevices);
-	numberOfDevicesAlong_Y = numberOfDevicesAlong_X;
+	numberOfDevicesAlong_X = (int)sqrt(numDevices);
+	numberOfDevicesAlong_Y =(int) numberOfDevicesAlong_X;
 }
 
 
@@ -356,7 +356,30 @@ void initHalos(int numDevices, vector<create_Device> &deviceArray, int dim_x, fl
 }
 
 //TODO:Create a Halo Exchange Mechanism for 2D Multi GPU topology
-void initHalos2D(int numDevices, vector<create_Device> &deviceArray, int dim_x, float *vec_in) {
+void initHalos2D(create_Device &device, int chunk_X, int chunk_Y, float *vec_in, int maxdevicesAlong_X, int maxDevicesAlong_Y) {
+
+	cout << endl <<"Inside Halo Computation 2D. printing Details" ;
+	cout << endl <<"Device ID "<< device.deviceID;
+	cout << endl << "Device position X " << device.devicePosition_X;
+	cout << endl << "Device position Y " << device.devicePosition_Y;
+	//Check for Boundary devices in GPU topology
+	if ((device.devicePosition_Y - 1) >= 0) {
+		cout << "West Halo needed ";
+		//device.wHalo[0] = 0.0;
+	}
+	if ((device.devicePosition_Y + 1) < maxdevicesAlong_X) {
+		cout << "East Halo needed  ";
+		//device.eHalo[0] = 0.0;
+	}
+	if ((device.devicePosition_X - 1) >= 0) {
+		cout << "South Halo needed ";
+		//device.sHalo[0] = 0.0;
+	}
+	if ((device.devicePosition_X + 1) < maxDevicesAlong_Y) {
+		cout << "North Halo needed  ";
+		//device.nHalo[0] = 0.0;
+	}
+
 
 }
 
@@ -706,7 +729,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		std::vector<float> partial_result(chunkSize);
 
 
-
 		for (int dev = 0; dev < numDevices; dev++)
 		{
 
@@ -751,6 +773,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 				rowEndPos += dim;
 			}
 
+			initHalos2D(deviceArray[dev],chunk_X, chunk_Y,&partial_vec_in[0], numberOfDevicesAlong_X,numberOfDevicesAlong_Y);
 
 			//==========Important: Logic for creation of Chunks to be allocated to GPUs Ends ==========================================
 			
@@ -774,17 +797,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			cudaMemcpy(d_Vec_Out[dev], &partial_vec_out, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 			cudaMemcpy(d_Rhs[dev], &partial_rhs, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 
-			//Copy intial Halos in 1D : TODO compute more than 1D
-			/*if (dev == 0) {
-				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-			}
-			else if (dev == (numDevices - 1)) {
-				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-			}
-			else {
-				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-			} */
+			//Copy intial Halos in 2D
+			
 		}
 	}
 	//=================================Domain Decomposition Logic Ends =================================================================
