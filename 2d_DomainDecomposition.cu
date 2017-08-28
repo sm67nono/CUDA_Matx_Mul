@@ -356,28 +356,59 @@ void initHalos(int numDevices, vector<create_Device> &deviceArray, int dim_x, fl
 }
 
 //TODO:Create a Halo Exchange Mechanism for 2D Multi GPU topology
-void initHalos2D(create_Device &device, int chunk_X, int chunk_Y, float *vec_in, int maxdevicesAlong_X, int maxDevicesAlong_Y) {
+void initHalos2D(create_Device &device, int chunk_X, int chunk_Y, float *vec_in, int maxdevicesAlong_X, int maxDevicesAlong_Y, int rowStartPos, int rowEndPos, int dim) {
 
 	cout << endl <<"Inside Halo Computation 2D. printing Details" ;
 	cout << endl <<"Device ID "<< device.deviceID;
-	cout << endl << "Device position X " << device.devicePosition_X;
-	cout << endl << "Device position Y " << device.devicePosition_Y;
-	//Check for Boundary devices in GPU topology
+	cout << endl <<"Device position X " << device.devicePosition_X;
+	cout << endl <<"Device position Y " << device.devicePosition_Y;
+	cout << endl << "Row Start " << rowStartPos;
+	cout << endl << "Row End " << rowEndPos;
+
+	//Checks provided for Boundary devices in GPU topology
 	if ((device.devicePosition_Y - 1) >= 0) {
 		cout << "West Halo needed ";
-		//device.wHalo[0] = 0.0;
+		device.wHalo.resize(chunk_Y);
+		for (int rowNum = 0; rowNum < chunk_Y; rowNum++)
+		{
+			device.wHalo[rowNum] = vec_in[rowStartPos];
+			//cout << rowStartPos << " ";
+			rowStartPos += dim;	
+		}
+
 	}
+
 	if ((device.devicePosition_Y + 1) < maxdevicesAlong_X) {
 		cout << "East Halo needed  ";
-		//device.eHalo[0] = 0.0;
+		device.eHalo.resize(chunk_Y);
+		for (int rowNum = 0; rowNum < chunk_Y; rowNum++)
+		{
+			device.eHalo[rowNum] = vec_in[rowEndPos];
+			//cout << rowEndPos << " ";
+			rowEndPos += dim;
+		}
 	}
 	if ((device.devicePosition_X - 1) >= 0) {
 		cout << "South Halo needed ";
-		//device.sHalo[0] = 0.0;
+		device.sHalo.resize(chunk_X);
+		for (int rowNum = 0; rowNum < chunk_X; rowNum++)
+		{
+			device.sHalo[rowNum] = vec_in[rowStartPos];
+			cout << rowStartPos << " ";
+			rowStartPos ++;
+		}
+		
 	}
 	if ((device.devicePosition_X + 1) < maxDevicesAlong_Y) {
 		cout << "North Halo needed  ";
-		//device.nHalo[0] = 0.0;
+		device.sHalo.resize(chunk_X);
+		rowStartPos = rowStartPos + (dim * chunk_Y);
+		for (int rowNum = 0; rowNum < chunk_X; rowNum++)
+		{
+			device.sHalo[rowNum] = vec_in[rowStartPos];
+			cout << rowStartPos << " ";
+			rowStartPos++;
+		}
 	}
 
 
@@ -753,6 +784,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			int rowStartPos = dataStartPos_X;
 			int rowEndPos = dataEndPos_X;
 			int indexCounter = 0;
+			//Initialize Halos
+			initHalos2D(deviceArray[dev], chunk_X, chunk_Y, &vec_in[0], numberOfDevicesAlong_X, numberOfDevicesAlong_Y, rowStartPos, rowEndPos-1, dim);
 			for (int rowNum = 0; rowNum < chunk_Y; rowNum++)
 			{
 				//Get one complete row for the GPU
@@ -773,7 +806,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 				rowEndPos += dim;
 			}
 
-			initHalos2D(deviceArray[dev],chunk_X, chunk_Y,&partial_vec_in[0], numberOfDevicesAlong_X,numberOfDevicesAlong_Y);
+		
 
 			//==========Important: Logic for creation of Chunks to be allocated to GPUs Ends ==========================================
 			
