@@ -23,7 +23,7 @@ std::unique_ptr<T> make_unique(Args&& ...args)
 struct create_Device
 {
 	int deviceID;
-	
+
 	//In a GPU topology set the GPU position
 	int devicePosition_X;
 	int devicePosition_Y;
@@ -33,7 +33,7 @@ struct create_Device
 	vector<float> wHalo;
 	vector<float> nHalo;
 	vector<float> sHalo;
-	
+
 };
 
 
@@ -64,7 +64,7 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 
 
 	//Halo computation for 1D Decompostion: For the First and Last GPU Halo computation on both the sides(nhalo and shalo wont be needed)
-	if (numDevices>1)
+	if (numDevices > 1)
 	{
 		//First GPU
 		if (deviceID == 0) {
@@ -240,29 +240,9 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 }
 
 
-/* Creates a topology for a number of devices in a system
-for ex. The devices are aware of left, right, top and bottom neigbours in 2D
-1. It also decides the chunk per devices by determining x-dimension and y-dimensions for per chunk of data per device.
-2. It also initializes halos for each devices which can be exchanged with the neighbours
-*/
 
-void createTopology(unsigned numDevices, vector<create_Device> &deviceArray, int numberOfDevicesAlong_X, int numberOfDevicesAlong_Y)
-{
-	deviceArray.resize(numDevices);
-	unsigned int deviceCount = 0;
-	for (int gridCount_X = 0;gridCount_X < numberOfDevicesAlong_X;gridCount_X++) {
-		for (int gridCount_Y = 0;gridCount_X < numberOfDevicesAlong_Y;gridCount_Y++) {
-			deviceArray[deviceCount].deviceID = deviceCount;
-			deviceArray[deviceCount].devicePosition_X =gridCount_X ;
-			deviceArray[deviceCount].devicePosition_Y = gridCount_Y;
-			//devicePosition_Z to be changed later
-			deviceArray[deviceCount].devicePosition_Z = 1;
-			deviceCount++;
-		}
-	}
-	
-}
 
+//====================================Creating Topology with the number of Devices available====================================
 
 void generateGPUGRID(unsigned int numDevices, int &numberOfDevicesAlong_X, int &numberOfDevicesAlong_Y)
 {
@@ -272,6 +252,32 @@ void generateGPUGRID(unsigned int numDevices, int &numberOfDevicesAlong_X, int &
 	numberOfDevicesAlong_Y = numberOfDevicesAlong_X;
 }
 
+
+/* Creates a topology for a number of devices in a system
+for ex. The devices are aware of left, right, top and bottom neigbours in 2D
+1. It also decides the chunk per devices by determining x-dimension and y-dimensions for per chunk of data per device.
+2. It also initializes halos for each devices which can be exchanged with the neighbours
+*/
+
+void createTopology(unsigned numDevices, vector<create_Device> &deviceArray, int numberOfDevicesAlong_X, int numberOfDevicesAlong_Y)
+{
+
+	deviceArray.resize(numDevices);
+	unsigned int deviceCount = 0;
+	for (int gridCount_X = 0; gridCount_X < numberOfDevicesAlong_X; gridCount_X++) {
+		for (int gridCount_Y = 0; gridCount_Y < numberOfDevicesAlong_Y; gridCount_Y++) {
+			deviceArray[deviceCount].deviceID = deviceCount;
+			deviceArray[deviceCount].devicePosition_X = gridCount_X;
+			deviceArray[deviceCount].devicePosition_Y = gridCount_Y;
+			//devicePosition_Z to be changed later
+			deviceArray[deviceCount].devicePosition_Z = 1;
+			deviceCount++;
+		}
+	}
+
+
+}
+//==============================================================================================================================
 
 //Init Halos: In 1D decomposition only North and South Halos are used. In 2D decomposition North, South, East and West Halo need to be initialized and computed
 //In 3D decomposition North, South, East , West, Top and Bottom needs to be initialized and computed
@@ -292,7 +298,7 @@ void initHalos(int numDevices, vector<create_Device> &deviceArray, int dim_x, fl
 
 		if (numDevices == 1)
 		{
-			for (int count = 0; count<dim_x; count++)
+			for (int count = 0; count < dim_x; count++)
 			{
 
 				deviceArray[i].nHalo[count] = 1.0f;
@@ -305,7 +311,7 @@ void initHalos(int numDevices, vector<create_Device> &deviceArray, int dim_x, fl
 		if (i == 0)
 		{
 
-			for (int k = pos, count = 0; count<dim_x; k++, count++)
+			for (int k = pos, count = 0; count < dim_x; k++, count++)
 			{
 				cout << "Halo nPosition for first Device is : " << k << endl;
 				deviceArray[i].nHalo[count] = vec_in[k];
@@ -317,7 +323,7 @@ void initHalos(int numDevices, vector<create_Device> &deviceArray, int dim_x, fl
 		else if (i == (numDevices - 1))
 		{
 
-			for (int k = pos - (chunksize + dim_x), count = 0; count<dim_x; count++, k++)
+			for (int k = pos - (chunksize + dim_x), count = 0; count < dim_x; count++, k++)
 			{
 				cout << "Halo sPosition for Last Device is : " << k << endl;
 				deviceArray[i].sHalo[count] = vec_in[k];
@@ -330,12 +336,12 @@ void initHalos(int numDevices, vector<create_Device> &deviceArray, int dim_x, fl
 		{
 
 
-			for (int k = pos, count = 0; count<dim_x; count++, k++)
+			for (int k = pos, count = 0; count < dim_x; count++, k++)
 			{
 				cout << "Halo nPosition for Mid Device " << i << " is : " << k << endl;
 				deviceArray[i].nHalo[count] = vec_in[k];
 			}
-			for (int k = pos - (chunksize + dim_x), count = 0; count<dim_x; count++, k++)
+			for (int k = pos - (chunksize + dim_x), count = 0; count < dim_x; count++, k++)
 			{
 				cout << "Halo sPosition for Mid Device " << i << "  is : " << k << endl;
 				deviceArray[i].sHalo[count] = vec_in[k];
@@ -367,7 +373,7 @@ void copyValues(float *A0, float *A1, float *A2, float *A3, float *A4, float *rh
 
 	for (unsigned int i = 0; i < size; i++)
 	{
-		A0[i] = val_A0[i];
+		A0[i] = i;// val_A0[i];
 		A1[i] = val_A1[i];
 		A2[i] = val_A2[i];
 		A3[i] = val_A3[i];
@@ -445,16 +451,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	vector<create_Device> deviceArray;
 
-	/*Generating a GPU Grid with  multiple GPUs and creating a Topology*/
-	int numberOfDevicesAlong_X = 1;
-	int numberOfDevicesAlong_Y = 1;
-	generateGPUGRID(numDevices, numberOfDevicesAlong_X, numberOfDevicesAlong_Y);
-	cout << "GPU grid structure is : "<<numberOfDevicesAlong_X <<" X "<<numberOfDevicesAlong_Y<<endl;
 
-	/* Creating a GPU topology with multiple devices*/
-	createTopology(numDevices, deviceArray, numberOfDevicesAlong_X,numberOfDevicesAlong_Y);
-	
-	
+
 	/* Distributed Compuation using Halos: Algorithm
 
 	1. Init Halos.
@@ -466,10 +464,10 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	*/
 
-	initHalos2D(numDevices, deviceArray, dim, &vec_in[0]);
+	/*initHalos(numDevices, deviceArray, dim, &vec_in[0]);
 
 	//Display Halos
-	if (numDevices>1) {
+	if (numDevices > 1) {
 		cout << endl << "Halo Init.." << endl;
 
 		for (int i = 0; i < numDevices; i++) {
@@ -480,7 +478,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			if (i == 0)
 			{
 				cout << "First Device";
-				for (int k = 0; k<dim; k++)
+				for (int k = 0; k < dim; k++)
 				{
 					cout << deviceArray[i].nHalo[k];
 				}
@@ -491,7 +489,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			else if (i == (numDevices - 1))
 			{
 				cout << "Last Device";
-				for (int k = 0; k<dim; k++)
+				for (int k = 0; k < dim; k++)
 				{
 					cout << deviceArray[i].sHalo[k];
 				}
@@ -503,12 +501,12 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			{
 
 				cout << "Middle Device";
-				for (int k = 0; k<dim; k++)
+				for (int k = 0; k < dim; k++)
 				{
 					cout << deviceArray[i].nHalo[k];
 				}
 
-				for (int k = 0; k<dim; k++)
+				for (int k = 0; k < dim; k++)
 				{
 					cout << deviceArray[i].sHalo[k];
 				}
@@ -573,8 +571,23 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 
 
-	cout << "Made it here..";
+	cout << "Made it here.."; */
 
+	//=================================Domain Decomposition Logic Starts=================================================================
+
+	/*Generating a GPU Grid with  multiple GPUs and creating a Topology*/
+
+	int numberOfDevicesAlong_X = 1;
+	int numberOfDevicesAlong_Y = 1;
+	generateGPUGRID(numDevices, numberOfDevicesAlong_X, numberOfDevicesAlong_Y);
+	cout << "GPU grid structure is : " << numberOfDevicesAlong_X << " X " << numberOfDevicesAlong_Y << endl;
+
+	/* Creating a GPU topology with multiple devices*/
+	createTopology(numDevices, deviceArray, numberOfDevicesAlong_X, numberOfDevicesAlong_Y);
+
+
+	//Set Decomposition dimension 1D or 2D
+	int decom_Dim = 2;
 
 	//Allocate memory on the devices
 
@@ -587,10 +600,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	//Logic for total chunk per device (Domain distribution)
 	for (int i = 0; i < numDevices; i++) {
-		//if(!(i==numDevices-1)){
+		//Chunk per GPU will be same irrepective of 1D or 2D decomposition
 		domainDivision[i] = size / numDevices;
-		//size = (size - size / numDevices);
-		//}
 	}
 
 
@@ -604,11 +615,12 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		*d_Vec_Out[4],
 		*d_Rhs[4],
 		*d_nhalos[4],
-		*d_shalos[4];
-
+		*d_shalos[4],
+		*d_ehalos[4],
+		*d_whalos[4];
 
 	/* The domain division is done in 1D rowise */
-	for (int dev = 0; dev<numDevices; dev++)
+	for (int dev = 0; dev < numDevices; dev++)
 	{
 		//Setting the device before allocation
 		cudaSetDevice(dev);
@@ -626,47 +638,157 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		cudaMalloc((void**)&d_Rhs[dev], domainDivision[dev] * sizeof(float));
 
 		//cudaMalloc Halos: North and South--1D. TODO: East and West for 2D
-		cudaMalloc((void**)&d_nhalos[dev], dim * sizeof(float));
-		cudaMalloc((void**)&d_shalos[dev], dim * sizeof(float));
+		cudaMalloc((void**)&d_nhalos[dev], (dim / decom_Dim) * sizeof(float));
+		cudaMalloc((void**)&d_shalos[dev], (dim / decom_Dim) * sizeof(float));
+		cudaMalloc((void**)&d_ehalos[dev], (dim / decom_Dim) * sizeof(float));
+		cudaMalloc((void**)&d_whalos[dev], (dim / decom_Dim) * sizeof(float));
+
 	}
 
 
 
 
 	/* The transfer of Data from Host to Device :  Domain Decomposition in 1D*/
+	if (decom_Dim == 1) {
 
-	for (int dev = 0, pos = 0; dev<numDevices; pos += domainDivision[dev], dev++)
-	{
-		//Setting the device before allocation
-		cudaSetDevice(dev);
+		for (int dev = 0, pos = 0; dev < numDevices; pos += domainDivision[dev], dev++)
+		{
+			//Setting the device before allocation
+			cudaSetDevice(dev);
 
-		//Copy the diagonals from host to device
-		cudaMemcpy(d_A0[dev], &a0[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_A1[dev], &a1[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_A2[dev], &a2[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_A3[dev], &a3[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_A4[dev], &a4[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			//Copy the diagonals from host to device
+			cudaMemcpy(d_A0[dev], &a0[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A1[dev], &a1[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A2[dev], &a2[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A3[dev], &a3[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A4[dev], &a4[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 
-		//Copy in and out vectors and RHS
-		cudaMemcpy(d_Vec_In[dev], &vec_in[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Vec_Out[dev], &vec_out[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Rhs[dev], &rhs[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			//Copy in and out vectors and RHS
+			cudaMemcpy(d_Vec_In[dev], &vec_in[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Vec_Out[dev], &vec_out[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Rhs[dev], &rhs[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 
-		//Copy intial Halos in 1D : TODO compute more than 1D
-		if (dev == 0) {
-			cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+			//Copy intial Halos in 1D : TODO compute more than 1D
+			if (dev == 0) {
+				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+			}
+			else if (dev == (numDevices - 1)) {
+				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+			}
+			else {
+				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+			}
 		}
-		else if (dev == (numDevices - 1)) {
-			cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-		}
-		else {
-			cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-		}
-
-
-
 	}
+
+
+
+	/* The transfer of Data from Host to Device :  Domain Decomposition in 2D*/
+	if (decom_Dim == 2) {
+		
+		//Total elements along each dim in 2D
+		int chunk_X = dim / numberOfDevicesAlong_X;
+		int chunk_Y = dim / numberOfDevicesAlong_Y;
+
+
+		//Create Partial Diagonal Vectors
+		//Size per GPU will be
+		int chunkSize = chunk_X * chunk_Y;
+		std::vector<float> partial_a0(chunkSize);
+		std::vector<float> partial_a1(chunkSize);
+		std::vector<float> partial_a2(chunkSize);
+		std::vector<float> partial_a3(chunkSize);
+		std::vector<float> partial_a4(chunkSize);
+		std::vector<float> partial_vec_in(chunkSize);
+		std::vector<float> partial_vec_out(chunkSize);
+		std::vector<float> partial_rhs(chunkSize);
+		std::vector<float> partial_result(chunkSize);
+
+
+
+		for (int dev = 0; dev < numDevices; dev++)
+		{
+
+			//Test the properties of the device assigned
+			cout << endl << "New Logical Device created " << deviceArray[dev].deviceID;
+			cout << endl << "New Logical Device (X,Y) coord (" << deviceArray[dev].devicePosition_X << "," << deviceArray[dev].devicePosition_Y << ")";
+
+
+			//==========Important: Logic for creation of Chunks to be allocated to GPUs==========================================
+
+			//Important : Mention about the correlation between the topology and data position in the thesis
+			cudaSetDevice(dev);
+			int devicePosX = deviceArray[dev].devicePosition_X;
+			int devicePosY = deviceArray[dev].devicePosition_Y;
+
+			//Calculating data position based on device coords
+			//numberOfDevicesAlong_X * Chunk_X * Chunk_Y : finds out the  total data per row of GPUs allocated
+			int dataStartPos_X = (devicePosX * numberOfDevicesAlong_X * chunk_X * chunk_Y) + (devicePosY * chunk_X);
+			int dataEndPos_X = dataStartPos_X + chunk_X;
+
+			//One complete row across all GPU is dim in order to get the next element above an element we add (currentPosition + dim )
+			int rowStartPos = dataStartPos_X;
+			int rowEndPos = dataEndPos_X;
+			int indexCounter = 0;
+			for (int rowNum = 0; rowNum < chunk_Y; rowNum++)
+			{
+				//Get one complete row for the GPU
+				for (int pos = rowStartPos; pos < rowEndPos; pos++)
+				{
+					partial_a0[indexCounter] = a0[pos];
+					partial_a1[indexCounter] = a1[pos];
+					partial_a2[indexCounter] = a2[pos];
+					partial_a3[indexCounter] = a3[pos];
+					partial_a4[indexCounter] = a4[pos];
+					partial_vec_in[indexCounter] = vec_in[pos];
+					partial_vec_out[indexCounter] = vec_out[pos];
+					partial_rhs[indexCounter] = rhs[pos];
+					partial_result[indexCounter] = result[pos];
+					indexCounter++;
+				}
+				rowStartPos += dim;
+				rowEndPos += dim;
+			}
+
+
+			//==========Important: Logic for creation of Chunks to be allocated to GPUs Ends ==========================================
+			
+			//Testing if inputs are correct
+			 /*cout << endl << endl;
+			for (int i = 0; i < indexCounter; i++) {
+				if ((i%chunk_X) == 0)cout << endl;
+				cout << partial_a0[i]<<" ";
+			}*/
+
+
+			//Copy the diagonals from host to device : calling all at once instead of putting inside the for loop
+			cudaMemcpy(d_A0[dev], &partial_a0, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A1[dev], &partial_a1, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A2[dev], &partial_a2, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A3[dev], &partial_a3, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A4[dev], &partial_a4, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+
+			//Copy in and out vectors and RHS
+			cudaMemcpy(d_Vec_In[dev], &partial_vec_in, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Vec_Out[dev], &partial_vec_out, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Rhs[dev], &partial_rhs, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+
+			//Copy intial Halos in 1D : TODO compute more than 1D
+			/*if (dev == 0) {
+				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+			}
+			else if (dev == (numDevices - 1)) {
+				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+			}
+			else {
+				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
+			} */
+		}
+	}
+	//=================================Domain Decomposition Logic Ends =================================================================
+
 
 	if (auto err = cudaGetLastError())
 	{
@@ -703,13 +825,13 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		iterations = numJacobiIt;
 	}
 
-	for (int i = 0; i<iterations; i++)
+	for (int i = 0; i < iterations; i++)
 	{
 
 		cout << endl << endl << "Iteration : " << i + 1 << endl << endl << endl;
 
 		//TODO: optimization using kernel instead of For Loop
-		for (int dev = 0, pos = 0; dev<numDevices; pos += domainDivision[dev], dev++)
+		for (int dev = 0, pos = 0; dev < numDevices; pos += domainDivision[dev], dev++)
 		{
 			cudaSetDevice(dev);
 			cout << endl << endl << "Kernal Execution on GPU : " << dev;
@@ -739,7 +861,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 
 			/* Store Halo positions after iteration for exchanging */
-			if (numDevices>1)
+			if (numDevices > 1)
 			{
 				if (dev == 0) {
 					cudaMemcpy(&prev_nHalo[0], d_nhalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
@@ -807,7 +929,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	// Freeing memory auto done by cuda deleter
 
 	//Free memory on devices
-	for (int dev = 0; dev<numDevices; dev++)
+	for (int dev = 0; dev < numDevices; dev++)
 	{
 		cudaFree(d_A0[dev]);
 		cudaFree(d_A1[dev]);
