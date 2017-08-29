@@ -29,17 +29,21 @@ struct create_Device
 	int devicePosition_Y;
 	int devicePosition_Z;
 
-	vector<float> eHalo;
-	vector<float> wHalo;
-	vector<float> nHalo;
-	vector<float> sHalo;
+	vector<float> eHalo = { 0 };
+	vector<float> wHalo = { 0 };
+	vector<float> nHalo = { 0 };
+	vector<float> sHalo = { 0 };
+
+	//Flags check the halos needed by the device
+	int eHalo_flag = 0;
+	int wHalo_flag = 0;
+	int nHalo_flag = 0;
+	int sHalo_flag = 0;
 
 };
 
-
-
 //Simple Jacobi iteration
-__global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, float *x_in, float *x_out, const float *rhs, float *nhalo, float *shalo, const int deviceID, const int numDevices)
+__global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, float *x_in, float *x_out, const float *rhs, const int ehalo_flag, const int whalo_flag, const int nhalo_flag, const int shalo_flag, float *ehalo, float *whalo, float *nhalo, float *shalo, const int deviceID, const int numDevices, const int domain_Decom)
 {
 	int index = threadIdx.x + blockDim.x * blockIdx.x;
 	float result = rhs[index];
@@ -64,175 +68,189 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 
 
 	//Halo computation for 1D Decompostion: For the First and Last GPU Halo computation on both the sides(nhalo and shalo wont be needed)
-	if (numDevices > 1)
+	/*if (domain_Decom == 1)
 	{
-		//First GPU
-		if (deviceID == 0) {
-			//We need to use nhalos
-
-			//Carry out computations for boundary elements
-			if (index != leftBoundaryElem)
-				//Left
-				result -= A1[index] * x_in[index - 1];
-
-			if (index != rightBoundaryElem)
-				//Right 
-				result -= A3[index] * x_in[index + 1];
-			if (index != bottomBoundaryElem)
-				//Bottom
-				result -= A0[index] * x_in[index - dim_x];
-
-			if (index != topBoundaryElem)
-				//Top
-				result -= A4[index] * x_in[index + dim_x];
-			//The top boundary needs element from nhalo
-			if (index == topBoundaryElem)
-				//nHalos
-				result -= A4[index] * nhalo[y_pos];
-
-
-
-
-			result /= A2[index];
-
-			x_out[index] = result;
-
-
-			//Update Halo at the end of computation
-			if (index == topBoundaryElem)
-				//nHalos updated
-				nhalo[y_pos] = result;
-
-			return;
-
-		}
-
-		//Last GPU
-		else if (deviceID == (numDevices - 1)) {
-			//We need to use shalos
-
-			//Carry out computations for boundary elements
-			if (index != leftBoundaryElem)
-				//Left
-				result -= A1[index] * x_in[index - 1];
-
-			if (index != rightBoundaryElem)
-				//Right 
-				result -= A3[index] * x_in[index + 1];
-			if (index != bottomBoundaryElem)
-				//Bottom
-				result -= A0[index] * x_in[index - dim_x];
-			//The Bottom boundary needs elements from shalo
-			if (index == bottomBoundaryElem)
-				//nHalos
-				result -= A0[index] * shalo[y_pos];
-
-
-			if (index != topBoundaryElem)
-				//Top
-				result -= A4[index] * x_in[index + dim_x];
-
-
-			result /= A2[index];
-
-			x_out[index] = result;
-
-			//Update Halo at the end of computation
-			if (index == bottomBoundaryElem)
-				//sHalos updated
-				shalo[y_pos] = result;
-
-			return;
-
-		}
-		//For all the middle GPUs
-		else
+		if (numDevices > 1)
 		{
-			//We need to use both shalos and nhalos
+			//First GPU
+			if (deviceID == 0) {
+				//We need to use nhalos
 
-			//Carry out computations for boundary elements
-			if (index != leftBoundaryElem)
-				//Left
-				result -= A1[index] * x_in[index - 1];
+				//Carry out computations for boundary elements
+				if (index != leftBoundaryElem)
+					//Left
+					result -= A1[index] * x_in[index - 1];
 
-			if (index != rightBoundaryElem)
-				//Right 
-				result -= A3[index] * x_in[index + 1];
+				if (index != rightBoundaryElem)
+					//Right 
+					result -= A3[index] * x_in[index + 1];
+				if (index != bottomBoundaryElem)
+					//Bottom
+					result -= A0[index] * x_in[index - dim_x];
 
-			if (index != bottomBoundaryElem)
-				//Bottom
-				result -= A0[index] * x_in[index - dim_x];
-			//The Bottom boundary needs elements from shalo
-			if (index == bottomBoundaryElem)
-				//nHalos
-				result -= A0[index] * shalo[y_pos];
+				if (index != topBoundaryElem)
+					//Top
+					result -= A4[index] * x_in[index + dim_x];
+				//The top boundary needs element from nhalo
+				if (index == topBoundaryElem)
+					//nHalos
+					result -= A4[index] * nhalo[y_pos];
 
-
-			if (index != topBoundaryElem)
-				//Top
-				result -= A4[index] * x_in[index + dim_x];
-			//The top boundary needs element from nhalo
-			if (index == topBoundaryElem)
-				//nHalos
-				result -= A4[index] * nhalo[y_pos];
-
+				result /= A2[index];
+				x_out[index] = result;
 
 
+				//Update Halo at the end of computation
+				if (index == topBoundaryElem)
+					//nHalos updated
+					nhalo[y_pos] = result;
+
+				return;
+
+			}
+
+			//Last GPU
+			else if (deviceID == (numDevices - 1)) {
+				//We need to use shalos
+
+				//Carry out computations for boundary elements
+				if (index != leftBoundaryElem)
+					//Left
+					result -= A1[index] * x_in[index - 1];
+
+				if (index != rightBoundaryElem)
+					//Right 
+					result -= A3[index] * x_in[index + 1];
+				if (index != bottomBoundaryElem)
+					//Bottom
+					result -= A0[index] * x_in[index - dim_x];
+				//The Bottom boundary needs elements from shalo
+				if (index == bottomBoundaryElem)
+					//nHalos
+					result -= A0[index] * shalo[y_pos];
 
 
-			result /= A2[index];
-
-			x_out[index] = result;
-
-
-
-			//Update Halo at the end of computation
-			if (index == bottomBoundaryElem)
-				//sHalos updated
-				shalo[y_pos] = result;
-
-			//Update Halo at the end of computation
-			if (index == topBoundaryElem)
-				//nHalos updated
-				nhalo[y_pos] = result;
+				if (index != topBoundaryElem)
+					//Top
+					result -= A4[index] * x_in[index + dim_x];
 
 
+				result /= A2[index];
 
-			return;
+				x_out[index] = result;
+
+				//Update Halo at the end of computation
+				if (index == bottomBoundaryElem)
+					//sHalos updated
+					shalo[y_pos] = result;
+
+				return;
+
+			}
+			//For all the middle GPUs
+			else
+			{
+				//We need to use both shalos and nhalos
+
+				//Carry out computations for boundary elements
+				if (index != leftBoundaryElem)
+					//Left
+					result -= A1[index] * x_in[index - 1];
+
+				if (index != rightBoundaryElem)
+					//Right 
+					result -= A3[index] * x_in[index + 1];
+
+				if (index != bottomBoundaryElem)
+					//Bottom
+					result -= A0[index] * x_in[index - dim_x];
+				//The Bottom boundary needs elements from shalo
+				if (index == bottomBoundaryElem)
+					//nHalos
+					result -= A0[index] * shalo[y_pos];
+
+
+				if (index != topBoundaryElem)
+					//Top
+					result -= A4[index] * x_in[index + dim_x];
+				//The top boundary needs element from nhalo
+				if (index == topBoundaryElem)
+					//nHalos
+					result -= A4[index] * nhalo[y_pos];
+				result /= A2[index];
+
+				x_out[index] = result;
+
+				//Update Halo at the end of computation
+				if (index == bottomBoundaryElem)
+					//sHalos updated
+					shalo[y_pos] = result;
+
+				//Update Halo at the end of computation
+				if (index == topBoundaryElem)
+					//nHalos updated
+					nhalo[y_pos] = result;
+
+				return;
+
+			}
 
 		}
+	}
+	else if (domain_Decom == 2) {
+		if (index != leftBoundaryElem)
+			//Left
+			result -= A1[index] * x_in[index - 1];
+
+		if (index != rightBoundaryElem)
+			//Right 
+			result -= A3[index] * x_in[index + 1];
+		if (index != bottomBoundaryElem)
+			//Bottom
+			result -= A0[index] * x_in[index - dim_x];
+
+		if (index != topBoundaryElem)
+			//Top
+			result -= A4[index] * x_in[index + dim_x];
+
+
+
+		result /= A2[index];
+
+		x_out[index] = result;
+
+		return;
 
 	}
-
 	//For computations on a Machine with a single GPU
 	else
-	{
+	{*/
 		{//For some reason order of computation (left,right,top and bottom) gives a different result
 
 		 //Carry out computations for boundary elements
-			if (index != leftBoundaryElem)
+			if (index == leftBoundaryElem)
 				//Left
-				result -= A1[index] * x_in[index - 1];
+				result = 10;
 
-			if (index != rightBoundaryElem)
+			if (index == rightBoundaryElem)
 				//Right 
-				result -= A3[index] * x_in[index + 1];
-			if (index != bottomBoundaryElem)
+				result = 20;
+			if (index == bottomBoundaryElem)
 				//Bottom
-				result -= A0[index] * x_in[index - dim_x];
+				result = 30;
 
-			if (index != topBoundaryElem)
+			if (index == topBoundaryElem)
 				//Top
-				result -= A4[index] * x_in[index + dim_x];
+				result = 40;
 
 
 
-			result /= A2[index];
+			//result /= A2[index];
 
 			x_out[index] = result;
 
 			return;
-		}
+		//}
 	}
 
 
@@ -244,12 +262,12 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 
 //====================================Creating Topology with the number of Devices available====================================
 
-void generateGPUGRID(unsigned int numDevices, int &numberOfDevicesAlong_X, int &numberOfDevicesAlong_Y)
+void generateGPUGRID(int numDevices, int &numberOfDevicesAlong_X, int &numberOfDevicesAlong_Y)
 {
 	//Finding GPU topology along x and y
 	//Assumuing total number of devices is a perfect square(To be changed later)
 	numberOfDevicesAlong_X = (int)sqrt(numDevices);
-	numberOfDevicesAlong_Y =(int) numberOfDevicesAlong_X;
+	numberOfDevicesAlong_Y = (int)numberOfDevicesAlong_X;
 }
 
 
@@ -259,7 +277,7 @@ for ex. The devices are aware of left, right, top and bottom neigbours in 2D
 2. It also initializes halos for each devices which can be exchanged with the neighbours
 */
 
-void createTopology(unsigned numDevices, vector<create_Device> &deviceArray, int numberOfDevicesAlong_X, int numberOfDevicesAlong_Y)
+void createTopology(int numDevices, vector<create_Device> &deviceArray, int numberOfDevicesAlong_X, int numberOfDevicesAlong_Y)
 {
 
 	deviceArray.resize(numDevices);
@@ -280,143 +298,121 @@ void createTopology(unsigned numDevices, vector<create_Device> &deviceArray, int
 //==============================================================================================================================
 
 //Init Halos: In 1D decomposition only North and South Halos are used. In 2D decomposition North, South, East and West Halo need to be initialized and computed
-//In 3D decomposition North, South, East , West, Top and Bottom needs to be initialized and computed
-void initHalos(int numDevices, vector<create_Device> &deviceArray, int dim_x, float *vec_in) {
-
-
-	deviceArray.resize(numDevices);
-	int chunksize = ((dim_x*dim_x) / numDevices);
-	cout << "chunk size is :" << chunksize << endl;
-	for (int i = 0, pos = chunksize; i < numDevices; pos += chunksize, i++) {
-
-		deviceArray[i].deviceID = i;
-		deviceArray[i].nHalo.resize(dim_x);
-		//TODO: 2D halo exchange
-		//TODO: deviceArray[i].eHalo.resize(dim_x);
-		//TODO: deviceArray[i].wHalo.resize(dim_x);
-		deviceArray[i].sHalo.resize(dim_x);
-
-		if (numDevices == 1)
-		{
-			for (int count = 0; count < dim_x; count++)
-			{
-
-				deviceArray[i].nHalo[count] = 1.0f;
-				deviceArray[i].sHalo[count] = 1.0f;
-			}
-			return;
-		}
-
-		//First Device needs only nHalo
-		if (i == 0)
-		{
-
-			for (int k = pos, count = 0; count < dim_x; k++, count++)
-			{
-				cout << "Halo nPosition for first Device is : " << k << endl;
-				deviceArray[i].nHalo[count] = vec_in[k];
-			}
-
-		}
-
-		//Last device needs only sHalo
-		else if (i == (numDevices - 1))
-		{
-
-			for (int k = pos - (chunksize + dim_x), count = 0; count < dim_x; count++, k++)
-			{
-				cout << "Halo sPosition for Last Device is : " << k << endl;
-				deviceArray[i].sHalo[count] = vec_in[k];
-			}
-
-		}
-
-		//All the other devices need both sHalo and nHalo
-		else
-		{
-
-
-			for (int k = pos, count = 0; count < dim_x; count++, k++)
-			{
-				cout << "Halo nPosition for Mid Device " << i << " is : " << k << endl;
-				deviceArray[i].nHalo[count] = vec_in[k];
-			}
-			for (int k = pos - (chunksize + dim_x), count = 0; count < dim_x; count++, k++)
-			{
-				cout << "Halo sPosition for Mid Device " << i << "  is : " << k << endl;
-				deviceArray[i].sHalo[count] = vec_in[k];
-			}
-
-
-		}
-
-	}
-
-
-}
-
 //TODO:Create a Halo Exchange Mechanism for 2D Multi GPU topology
 void initHalos2D(create_Device &device, int chunk_X, int chunk_Y, float *vec_in, int maxdevicesAlong_X, int maxDevicesAlong_Y, int rowStartPos, int rowEndPos, int dim) {
 
-	cout << endl <<"Inside Halo Computation 2D. printing Details" ;
-	cout << endl <<"Device ID "<< device.deviceID;
-	cout << endl <<"Device position X " << device.devicePosition_X;
-	cout << endl <<"Device position Y " << device.devicePosition_Y;
+	cout << endl << "Inside Halo Computation 2D. printing Details";
+	cout << endl << "Device ID " << device.deviceID;
+	cout << endl << "Device position X " << device.devicePosition_X;
+	cout << endl << "Device position Y " << device.devicePosition_Y;
 	cout << endl << "Row Start " << rowStartPos;
 	cout << endl << "Row End " << rowEndPos;
+
+	//Assigning counter for each individual Halos. To prevent update of the same counter
+	//int rowStartPosEast = rowStartPos;
+	int rowStartPosWest = rowStartPos;
+	int rowStartPosNorth = rowStartPos;
+	int rowStartPosSouth = rowStartPos;
+
+	int rowEndPosEast = rowEndPos;
+	//int rowEndPosWest =  rowEndPos;
+	//int rowEndPosNorth = rowEndPos;
+	//int rowEndPosSouth = rowEndPos;
+
 
 	//Checks provided for Boundary devices in GPU topology
 	if ((device.devicePosition_Y - 1) >= 0) {
 		cout << "West Halo needed ";
+		device.wHalo_flag = 1;
 		device.wHalo.resize(chunk_Y);
 		for (int rowNum = 0; rowNum < chunk_Y; rowNum++)
 		{
-			device.wHalo[rowNum] = vec_in[rowStartPos];
-			//cout << rowStartPos << " ";
-			rowStartPos += dim;	
+			device.wHalo[rowNum] = vec_in[rowStartPosWest];
+			//cout << rowStartPosWest << " ";
+			rowStartPosWest += dim;
 		}
 
 	}
 
 	if ((device.devicePosition_Y + 1) < maxdevicesAlong_X) {
 		cout << "East Halo needed  ";
+		device.eHalo_flag = 1;
 		device.eHalo.resize(chunk_Y);
 		for (int rowNum = 0; rowNum < chunk_Y; rowNum++)
 		{
-			device.eHalo[rowNum] = vec_in[rowEndPos];
-			//cout << rowEndPos << " ";
-			rowEndPos += dim;
+			device.eHalo[rowNum] = vec_in[rowEndPosEast];
+			//cout << rowEndPosEast << " ";
+			rowEndPosEast += dim;
 		}
 	}
 	if ((device.devicePosition_X - 1) >= 0) {
 		cout << "South Halo needed ";
+		device.sHalo_flag = 1;
 		device.sHalo.resize(chunk_X);
 		for (int rowNum = 0; rowNum < chunk_X; rowNum++)
 		{
-			device.sHalo[rowNum] = vec_in[rowStartPos];
-			cout << rowStartPos << " ";
-			rowStartPos ++;
+			device.sHalo[rowNum] = vec_in[rowStartPosSouth];
+			//cout << rowStartPosSouth << " ";
+			rowStartPosSouth++;
 		}
-		
+
 	}
 	if ((device.devicePosition_X + 1) < maxDevicesAlong_Y) {
 		cout << "North Halo needed  ";
-		device.sHalo.resize(chunk_X);
-		rowStartPos = rowStartPos + (dim * chunk_Y);
+		device.nHalo_flag = 1;
+		device.nHalo.resize(chunk_X);
+		rowStartPosNorth = rowStartPosNorth + (dim * (chunk_Y - 1));
 		for (int rowNum = 0; rowNum < chunk_X; rowNum++)
 		{
-			device.sHalo[rowNum] = vec_in[rowStartPos];
-			cout << rowStartPos << " ";
-			rowStartPos++;
+			device.nHalo[rowNum] = vec_in[rowStartPosNorth];
+			//cout << rowStartPosNorth << " ";
+			rowStartPosNorth++;
 		}
 	}
 
+}
+
+//======================================Exchange Halos: on Host==============================================
+
+
+int getDeviceIDfromCoord(int devCoord_x, int devCoord_y, int numberofDevicesAlong_X) {
+	int devID = (devCoord_x * numberofDevicesAlong_X) + devCoord_y;
+	return devID;
+}
+
+
+void exchangehalos_onHost(int numDevices, vector<create_Device> &deviceArray, int numberofDevicesAlong_X)
+{
+	//Halos exist in pairs so:
+	//Important: A device exchanges North-to-South Pairs and East-to-West Pairs only. Not South-to-North pairs and West-to-East pairs
+	//That way the number of exchanges are kept to minimum
+
+
+	for (int dev = 0;dev < numDevices;dev++)
+	{
+		int getDevCoord_X = deviceArray[dev].devicePosition_X;
+		int getDevCoord_Y = deviceArray[dev].devicePosition_Y;
+
+
+		//Check if device is having a north Halo buffer
+		if (deviceArray[dev].nHalo_flag == 1) {
+			int devIDtoNorth = getDeviceIDfromCoord(getDevCoord_X + 1, getDevCoord_Y, numberofDevicesAlong_X);
+			//Exchange Halos 
+			(deviceArray[dev].nHalo).swap(deviceArray[devIDtoNorth].sHalo);
+		}
+
+		//Check if device is having a east Halo buffer
+		if (deviceArray[dev].eHalo_flag == 1) {
+			int devIDtoEast = getDeviceIDfromCoord(getDevCoord_X, getDevCoord_Y + 1, numberofDevicesAlong_X);
+			//Exchange Halos 
+			(deviceArray[dev].eHalo).swap(deviceArray[devIDtoEast].wHalo);
+		}
+	}
 
 }
 
 
-
-//Domain Decompostion 2D:Data distribution
+//===========================Exchange Halos: on Host Ends=====================================================
 
 
 //Init matrix Diagonals A0, A1, A2, A3, A4
@@ -437,9 +433,6 @@ void copyValues(float *A0, float *A1, float *A2, float *A3, float *A4, float *rh
 		vec_out[i] = 0.0f;
 
 	}
-
-
-
 }
 
 
@@ -485,11 +478,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	std::vector<float> vec_out(size);
 	std::vector<float> rhs(size);
 	std::vector<float> result(size);
-
-	//Used for exchanging the Halos after each Jacobi Iteration
-	std::vector<float> prev_nHalo(dim);
-	std::vector<float> curr_sHalo(dim);
-
+	
+	
 	//Get the total number of devices
 	int numDevices;
 	cudaGetDeviceCount(&numDevices);
@@ -505,8 +495,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	vector<create_Device> deviceArray;
 
-
-
 	/* Distributed Compuation using Halos: Algorithm
 
 	1. Init Halos.
@@ -518,115 +506,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	*/
 
-	/*initHalos(numDevices, deviceArray, dim, &vec_in[0]);
-
-	//Display Halos
-	if (numDevices > 1) {
-		cout << endl << "Halo Init.." << endl;
-
-		for (int i = 0; i < numDevices; i++) {
-
-			cout << "Device ID: " << deviceArray[i].deviceID;
-
-			//First Device needs only nHalo
-			if (i == 0)
-			{
-				cout << "First Device";
-				for (int k = 0; k < dim; k++)
-				{
-					cout << deviceArray[i].nHalo[k];
-				}
-
-			}
-
-			//Last device needs only sHalo
-			else if (i == (numDevices - 1))
-			{
-				cout << "Last Device";
-				for (int k = 0; k < dim; k++)
-				{
-					cout << deviceArray[i].sHalo[k];
-				}
-
-			}
-
-			//All the other devices need both sHalo and nHalo
-			else
-			{
-
-				cout << "Middle Device";
-				for (int k = 0; k < dim; k++)
-				{
-					cout << deviceArray[i].nHalo[k];
-				}
-
-				for (int k = 0; k < dim; k++)
-				{
-					cout << deviceArray[i].sHalo[k];
-				}
-
-
-			}
-			cout << endl;
-
-
-		}
-
-		cout << endl;
-		cout << endl;
-		cout << endl;
-
-	}
-
-	cout << "A0             ....";
-	for (int i = 0; i < size; i++) {
-		cout << a0[i] << " ";
-	}
-	cout << endl;
-
-	cout << "A1             ....";
-	for (int i = 0; i < size; i++) {
-		cout << a1[i] << " ";
-	}
-	cout << endl;
-	cout << "A2             ....";
-	for (int i = 0; i < size; i++) {
-		cout << a2[i] << " ";
-	}
-	cout << endl;
-	cout << "A3             ....";
-	for (int i = 0; i < size; i++) {
-		cout << a3[i] << " ";
-	}
-	cout << endl;
-	cout << "A4             ....";
-	for (int i = 0; i < size; i++) {
-		cout << a4[i] << " ";
-	}
-	cout << endl;
-
-	cout << "RHS             ....";
-	for (int i = 0; i < size; i++) {
-		cout << rhs[i] << " ";
-	}
-	cout << endl;
-
-	cout << "Vec In            ...." << endl;
-
-	for (int i = size - 1; i >= 0; i--) {
-
-
-		if ((i + 1) % dim == 0) { cout << endl; }
-
-		cout << vec_in[i] << " ";
-	}
-
-	cout << endl;
-
-
-
-	cout << "Made it here.."; */
-
 	//=================================Domain Decomposition Logic Starts=================================================================
 
 	/*Generating a GPU Grid with  multiple GPUs and creating a Topology*/
@@ -636,14 +515,16 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	generateGPUGRID(numDevices, numberOfDevicesAlong_X, numberOfDevicesAlong_Y);
 	cout << "GPU grid structure is : " << numberOfDevicesAlong_X << " X " << numberOfDevicesAlong_Y << endl;
 
-	/* Creating a GPU topology with multiple devices*/
-	createTopology(numDevices, deviceArray, numberOfDevicesAlong_X, numberOfDevicesAlong_Y);
-
-
 	//Set Decomposition dimension 1D or 2D
 	int decom_Dim = 2;
 
-	//Allocate memory on the devices
+	//Total elements along each dim in 2D
+	int chunk_X = dim / numberOfDevicesAlong_X;
+	int chunk_Y = dim / numberOfDevicesAlong_Y;
+
+	/* Creating a GPU topology with multiple devices*/
+	createTopology(numDevices, deviceArray, numberOfDevicesAlong_X, numberOfDevicesAlong_Y);
+
 
 	//Let the total number of GPU be 2 : has to be changed later
 	//Computation divided into (size/2) on first and size-(size/2) on second
@@ -673,7 +554,10 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		*d_ehalos[4],
 		*d_whalos[4];
 
-	/* The domain division is done in 1D rowise */
+	//Compute / store partial results on the Host
+	//float *partial_result[4];
+
+
 	for (int dev = 0; dev < numDevices; dev++)
 	{
 		//Setting the device before allocation
@@ -692,59 +576,16 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		cudaMalloc((void**)&d_Rhs[dev], domainDivision[dev] * sizeof(float));
 
 		//cudaMalloc Halos: North and South--1D. TODO: East and West for 2D
-		cudaMalloc((void**)&d_nhalos[dev], (dim / decom_Dim) * sizeof(float));
-		cudaMalloc((void**)&d_shalos[dev], (dim / decom_Dim) * sizeof(float));
-		cudaMalloc((void**)&d_ehalos[dev], (dim / decom_Dim) * sizeof(float));
-		cudaMalloc((void**)&d_whalos[dev], (dim / decom_Dim) * sizeof(float));
+		cudaMalloc((void**)&d_nhalos[dev], chunk_X * sizeof(float));
+		cudaMalloc((void**)&d_shalos[dev], chunk_X * sizeof(float));
+		cudaMalloc((void**)&d_ehalos[dev], chunk_Y * sizeof(float));
+		cudaMalloc((void**)&d_whalos[dev], chunk_Y * sizeof(float));
 
 	}
-
-
-
-
-	/* The transfer of Data from Host to Device :  Domain Decomposition in 1D*/
-	if (decom_Dim == 1) {
-
-		for (int dev = 0, pos = 0; dev < numDevices; pos += domainDivision[dev], dev++)
-		{
-			//Setting the device before allocation
-			cudaSetDevice(dev);
-
-			//Copy the diagonals from host to device
-			cudaMemcpy(d_A0[dev], &a0[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_A1[dev], &a1[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_A2[dev], &a2[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_A3[dev], &a3[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_A4[dev], &a4[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-
-			//Copy in and out vectors and RHS
-			cudaMemcpy(d_Vec_In[dev], &vec_in[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_Vec_Out[dev], &vec_out[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_Rhs[dev], &rhs[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-
-			//Copy intial Halos in 1D : TODO compute more than 1D
-			if (dev == 0) {
-				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-			}
-			else if (dev == (numDevices - 1)) {
-				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-			}
-			else {
-				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-			}
-		}
-	}
-
 
 
 	/* The transfer of Data from Host to Device :  Domain Decomposition in 2D*/
 	if (decom_Dim == 2) {
-		
-		//Total elements along each dim in 2D
-		int chunk_X = dim / numberOfDevicesAlong_X;
-		int chunk_Y = dim / numberOfDevicesAlong_Y;
-
 
 		//Create Partial Diagonal Vectors
 		//Size per GPU will be
@@ -758,6 +599,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		std::vector<float> partial_vec_out(chunkSize);
 		std::vector<float> partial_rhs(chunkSize);
 		std::vector<float> partial_result(chunkSize);
+
 
 
 		for (int dev = 0; dev < numDevices; dev++)
@@ -785,7 +627,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			int rowEndPos = dataEndPos_X;
 			int indexCounter = 0;
 			//Initialize Halos
-			initHalos2D(deviceArray[dev], chunk_X, chunk_Y, &vec_in[0], numberOfDevicesAlong_X, numberOfDevicesAlong_Y, rowStartPos, rowEndPos-1, dim);
+			initHalos2D(deviceArray[dev], chunk_X, chunk_Y, &vec_in[0], numberOfDevicesAlong_X, numberOfDevicesAlong_Y, rowStartPos, rowEndPos - 1, dim);
 			for (int rowNum = 0; rowNum < chunk_Y; rowNum++)
 			{
 				//Get one complete row for the GPU
@@ -806,140 +648,106 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 				rowEndPos += dim;
 			}
 
-		
+
 
 			//==========Important: Logic for creation of Chunks to be allocated to GPUs Ends ==========================================
-			
+
 			//Testing if inputs are correct
 			 /*cout << endl << endl;
 			for (int i = 0; i < indexCounter; i++) {
 				if ((i%chunk_X) == 0)cout << endl;
 				cout << partial_a0[i]<<" ";
 			}*/
-
+			
 
 			//Copy the diagonals from host to device : calling all at once instead of putting inside the for loop
-			cudaMemcpy(d_A0[dev], &partial_a0, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_A1[dev], &partial_a1, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_A2[dev], &partial_a2, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_A3[dev], &partial_a3, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_A4[dev], &partial_a4, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A0[dev], &partial_a0[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A1[dev], &partial_a1[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A2[dev], &partial_a2[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A3[dev], &partial_a3[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_A4[dev], &partial_a4[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 
+
+			
 			//Copy in and out vectors and RHS
-			cudaMemcpy(d_Vec_In[dev], &partial_vec_in, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_Vec_Out[dev], &partial_vec_out, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_Rhs[dev], &partial_rhs, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Vec_In[dev], &partial_vec_in[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Vec_Out[dev], &partial_vec_out[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Rhs[dev], &partial_rhs[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 
-			//Copy intial Halos in 2D
+
 			
 		}
+
+		//Copy intial Halos in 2D
+		//Initial Exchange Halos: Then do intial cudaMemcopies
+		exchangehalos_onHost(numDevices, deviceArray, numberOfDevicesAlong_X);
+		for (int dev = 0; dev < numDevices; dev++)
+		{
+
+			//Copying Halos to the device
+			cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], chunk_X * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], chunk_X * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ehalos[dev], &deviceArray[dev].eHalo[0], chunk_Y * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_whalos[dev], &deviceArray[dev].wHalo[0], chunk_Y * sizeof(float), cudaMemcpyHostToDevice);
+		}
+
 	}
 	//=================================Domain Decomposition Logic Ends =================================================================
+	
 
-
-	if (auto err = cudaGetLastError())
-	{
-		cout << "Jacobi launch failed: " << cudaGetErrorString(err) << endl;
-		return err;
-	}
-
-
-
-	if (auto err = cudaGetLastError())
-	{
-		cout << "Jacobi launch failed: " << cudaGetErrorString(err) << endl;
-		return err;
-	}
-
-
-
-
-	if (auto err = cudaGetLastError())
-	{
-		cout << "Jacobi launch failed: " << cudaGetErrorString(err) << endl;
-		return err;
-	}
-
-	//multMatrix(d_A0, d_A1, d_A2, d_A3, d_A4, myDim, d_vec, d_res);
-
-	//Perform one Jacobi Step
-	int blocksize = dim / numDevices; //TODO: make it to more than 2 GPUs
-	int threads = dim;
+	int blocksize = chunk_X;
+	int threads = chunk_Y;
 
 	//Call to kernal
-	int iterations = 4;
+	int iterations = 0;
 	if (numJacobiIt != 0) {
 		iterations = numJacobiIt;
 	}
+	else 
+	{
+		cout << endl<<" No. of iterations is zero exiting... ";
+        //return;
+	}
 
+	
 	for (int i = 0; i < iterations; i++)
 	{
-
+		std::vector<float> partial_resultOnHost(chunk_X * chunk_Y);
 		cout << endl << endl << "Iteration : " << i + 1 << endl << endl << endl;
 
 		//TODO: optimization using kernel instead of For Loop
-		for (int dev = 0, pos = 0; dev < numDevices; pos += domainDivision[dev], dev++)
+		for (int dev = 0; dev < numDevices;dev++)
 		{
+			cout << endl <<endl<< "Computation for Device  " << dev;
 			cudaSetDevice(dev);
-			cout << endl << endl << "Kernal Execution on GPU : " << dev;
-			cout << endl << "Position :" << pos;
-
-
-			cout << endl << "Check Intermediate Result before it gets passed to kernal" << endl;
-
-			cudaMemcpy(&result[0] + pos, d_Vec_In[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
-
-			for (int i = size - 1; i >= 0; i--) {
-
-
-				if ((i + 1) % dim == 0) { cout << endl; }
-
-				cout << "#pos:" << i << " " << result[i] << "    ";
-			}
-
-			jacobi_Simple <<<blocksize, threads >>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices);
-
+			jacobi_Simple <<<blocksize, threads >>> (d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim);
 			//TODO: Currently serial has to be done cudaMemcpyAsync using CUDA Streams
-
 			//Copy the intermediate result from Device to Host memory
-			cudaMemcpy(&result[0] + pos, d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+			
+			cudaMemcpy(&partial_resultOnHost[0], d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+			//Check Results
+			for (int i = 0; i <(chunk_X * chunk_Y) ;i++) {
+				if (i%chunk_X == 0) { cout << endl; }
+				cout << partial_resultOnHost[i]<<" ";
+			}
 			//Copy the intermediate result from the Host memory to the Device memory
-			cudaMemcpy(d_Vec_In[dev], &result[0] + pos, domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
-
-
+			cudaMemcpy(d_Vec_In[dev], &partial_resultOnHost[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
 			/* Store Halo positions after iteration for exchanging */
 			if (numDevices > 1)
 			{
-				if (dev == 0) {
-					cudaMemcpy(&prev_nHalo[0], d_nhalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
-				}
-				else if (dev == (numDevices - 1)) {
-					//Exchange Happens here
-					cudaMemcpy(&curr_sHalo[0], d_shalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
-					cudaMemcpy(d_shalos[dev], &prev_nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-					cudaMemcpy(d_nhalos[dev - 1], &curr_sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-
-				}
-				else {
-					//Exchange Happens here
-					cudaMemcpy(&curr_sHalo[0], d_shalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
-					cudaMemcpy(d_shalos[dev], &prev_nHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-					cudaMemcpy(d_nhalos[dev - 1], &curr_sHalo[0], dim * sizeof(float), cudaMemcpyHostToDevice);
-					//Store current North Boundary in prev_halo for exchanging in later step
-					cudaMemcpy(&prev_nHalo[0], d_nhalos[dev], dim * sizeof(float), cudaMemcpyDeviceToHost);
-				}
+				cudaMemcpy(&deviceArray[dev].nHalo[0], d_nhalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(&deviceArray[dev].sHalo[0], d_shalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(&deviceArray[dev].eHalo[0], d_nhalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(&deviceArray[dev].wHalo[0], d_shalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost);
+				
+				
 			}
-
-
+			
 		}
 
-		//TODO: Using P2P to be done later
-		//exchangeHalos(numDevices,result, d_Vec_In);
-		//Exchange halo logic
-		//1. Prev = current nhalo
-		//2. On next  iteration shalo = Prev and, Prev = nhalo.
-
-
+		//Exchange Halos after each iteration
+		exchangehalos_onHost(numDevices, deviceArray, numberOfDevicesAlong_X);
+		
 	}
 
 	if (auto err = cudaGetLastError())
@@ -951,10 +759,10 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	cout << endl << "Iterations successful " << endl;
 
 	//Copy the final result from all devices
-	for (int dev = 0, pos = 0; dev < numDevices; pos += domainDivision[dev], dev++)
+	/*for (int dev = 0, dev < numDevices; dev++)
 	{
-		cudaMemcpy(&result[0] + pos, d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
-	}
+		cudaMemcpy(&result[0], d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+	}*/
 
 
 
@@ -966,13 +774,13 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	//Print result
 
-	for (int i = size - 1; i >= 0; i--) {
+	/*for (int i = size - 1; i >= 0; i--) {
 
 
 		if ((i + 1) % dim == 0) { cout << endl; }
 
 		cout << result[i] << " ";
-	}
+	}*/
 	// Freeing memory auto done by cuda deleter
 
 	//Free memory on devices
@@ -987,6 +795,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		cudaFree(d_Vec_Out[dev]);
 		cudaFree(d_nhalos[dev]);
 		cudaFree(d_shalos[dev]);
+		cudaFree(d_ehalos[dev]);
+		cudaFree(d_whalos[dev]);
 		cudaFree(d_Rhs[dev]);
 	}
 
@@ -1002,8 +812,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 int performJacobi_MultiGPU2D_Decom(unsigned int dim, unsigned int numJacobiIt, float* A0, float* A1, float* A2, float* A3, float* A4, float* rhs, float* x_in)
 {
-
-
 	cudaError_t cudaStatus = performMultiGPUJacobi(dim, numJacobiIt, &A0[0], &A1[0], &A2[0], &A3[0], &A4[0], &rhs[0], &x_in[0]);
 
 	if (cudaStatus != cudaSuccess) {
