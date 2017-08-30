@@ -748,10 +748,23 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		{
 
 			//Copying Halos to the device
-			cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], chunk_X * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], chunk_X * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_ehalos[dev], &deviceArray[dev].eHalo[0], chunk_Y * sizeof(float), cudaMemcpyHostToDevice);
-			cudaMemcpy(d_whalos[dev], &deviceArray[dev].wHalo[0], chunk_Y * sizeof(float), cudaMemcpyHostToDevice);
+			if (deviceArray[dev].nHalo_flag == 1)
+			{
+				cudaMemcpy(d_nhalos[dev], &deviceArray[dev].nHalo[0], chunk_X * sizeof(float), cudaMemcpyHostToDevice);
+			}
+			if (deviceArray[dev].sHalo_flag == 1)
+			{
+				cudaMemcpy(d_shalos[dev], &deviceArray[dev].sHalo[0], chunk_X * sizeof(float), cudaMemcpyHostToDevice);
+
+			}
+			if (deviceArray[dev].eHalo_flag == 1)
+			{
+				cudaMemcpy(d_ehalos[dev], &deviceArray[dev].eHalo[0], chunk_Y * sizeof(float), cudaMemcpyHostToDevice);
+			}
+			if (deviceArray[dev].wHalo_flag == 1)
+			{
+				cudaMemcpy(d_whalos[dev], &deviceArray[dev].wHalo[0], chunk_Y * sizeof(float), cudaMemcpyHostToDevice);
+			}
 		}
 
 	}
