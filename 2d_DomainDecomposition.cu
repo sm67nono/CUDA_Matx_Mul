@@ -590,8 +590,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	//Let the total number of GPU be 2 : has to be changed later
 	//Computation divided into (size/2) on first and size-(size/2) on second
-	int *domainDivision;
-	domainDivision = new int[numDevices];
+	
+	std::vector<int> domainDivision(numDevices);
 
 
 
@@ -603,18 +603,18 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 
 	//For use on Device 
-	float *d_A0[4],
-		*d_A1[4],
-		*d_A2[4],
-		*d_A3[4],
-		*d_A4[4],
-		*d_Vec_In[4],
-		*d_Vec_Out[4],
-		*d_Rhs[4],
-		*d_nhalos[4],
-		*d_shalos[4],
-		*d_ehalos[4],
-		*d_whalos[4];
+	std::vector<float*>d_A0(numDevices);
+	std::vector<float*>d_A1(numDevices);
+	std::vector<float*>d_A2(numDevices);
+	std::vector<float*>d_A3(numDevices);
+	std::vector<float*>d_A4(numDevices);
+	std::vector<float*>d_Vec_In(numDevices);
+	std::vector<float*>d_Vec_Out(numDevices);
+	std::vector<float*>d_nhalos(numDevices);
+	std::vector<float*>d_shalos(numDevices);
+	std::vector<float*>d_ehalos(numDevices);
+	std::vector<float*>d_whalos(numDevices);
+	std::vector<float*>d_Rhs(numDevices);
 
 	//Compute / store partial results on the Host
 	//float *partial_result[4];
@@ -675,7 +675,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			//==========Important: Logic for creation of Chunks to be allocated to GPUs==========================================
 
 			//Important : Mention about the correlation between the topology and data position in the thesis
-			cudaSetDevice(dev);
+			
 			int devicePosX = deviceArray[dev].devicePosition_X;
 			int devicePosY = deviceArray[dev].devicePosition_Y;
 
@@ -721,6 +721,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			cout << partial_a0[i]<<" ";
 			}*/
 
+			//Setting Cuda device
+			cudaSetDevice(dev);
 
 			//Copy the diagonals from host to device : calling all at once instead of putting inside the for loop
 			cudaMemcpy(d_A0[dev], &partial_a0[0], domainDivision[dev] * sizeof(float), cudaMemcpyHostToDevice);
@@ -774,6 +776,9 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	int blocksize = chunk_X;
 	int threads = chunk_Y;
 
+	//cout << endl<<"blocksize" << blocksize;
+	//cout << endl<<"thread" << threads;
+
 	//Call to kernal
 	int iterations = 0;
 	if (numJacobiIt != 0) {
@@ -796,7 +801,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		{
 			cout << endl << endl << "Computation for Device  " << dev;
 			cudaSetDevice(dev);
-			jacobi_Simple <<<blocksize, threads>>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim);
+			jacobi_Simple<<<blocksize, threads>>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim);
 			
 			//TODO: Performance Upgrade: Currently serial has to be done cudaMemcpyAsync using CUDA Streams
 
@@ -821,34 +826,34 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 				if (deviceArray[dev].nHalo_flag == 1)
 				{
 					cudaMemcpy(&deviceArray[dev].nHalo[0], d_nhalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost);
-					cout << endl << "N_Halos from Device " << dev;
+					/*cout << endl << "N_Halos from Device " << dev;
 					for (int i = 0;i < chunk_X;i++) {
 						cout << deviceArray[dev].nHalo[i] << " ";
-					}
+					}*/
 				}
 				if (deviceArray[dev].sHalo_flag == 1)
 				{
 					cudaMemcpy(&deviceArray[dev].sHalo[0], d_shalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost);
-					cout << endl << "S_Halos from Device " << dev;
+					/*cout << endl << "S_Halos from Device " << dev;
 					for (int i = 0;i < chunk_X;i++) {
 						cout << deviceArray[dev].sHalo[i] << " ";
-					}
+					}*/
 				}
 				if (deviceArray[dev].eHalo_flag == 1)
 				{
 					cudaMemcpy(&deviceArray[dev].eHalo[0], d_ehalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost);
-					cout << endl << "E_Halos from Device " << dev;
+					/*cout << endl << "E_Halos from Device " << dev;
 					for (int i = 0;i < chunk_Y;i++) {
 						cout << deviceArray[dev].eHalo[i] << " ";
-					}
+					}*/
 				}
 				if (deviceArray[dev].wHalo_flag == 1)
 				{
 					cudaMemcpy(&deviceArray[dev].wHalo[0], d_whalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost);
-					cout << endl << "W_Halos from Device " << dev;
+					/*cout << endl << "W_Halos from Device " << dev;
 					for (int i = 0;i < chunk_Y;i++) {
 						cout << deviceArray[dev].wHalo[i] << " ";
-					}
+					}*/
 				}
 
 			}
@@ -912,7 +917,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	cout << endl << "Device Memory free successful.";
 	//Take care of dynamic mem location
-	delete[] domainDivision;
+	//delete[] domainDivision;
 
 	return cudaSuccess;
 
