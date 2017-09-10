@@ -1,0 +1,13 @@
+After v1.0 in 2D
+
+1. Check Performance by CUDA streams. Pinned memory from Host.
+
+Commit it to a seperate version
+
+2. Add P2P excahnges transfers and performance.
+
+Commit it to a seperate version
+
+3. Add zero copy host memory and check for performance.
+
+Repeat the same in 3D
