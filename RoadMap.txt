@@ -11,3 +11,42 @@ Commit it to a seperate version
 3. Add zero copy host memory and check for performance.
 
 Repeat the same in 3D
+
+
+1. Performance evaluation using just Memcpy for Halos. not MemcpyAsync
+
+2. Performance evaluation for kernel launches on default streams for each device. (Check concurrent kernal launches)
+
+3. Performance evaluation for non pinned Halos vs Pinend Halos.
+
+4. Perforamnce evaluation for p2p transfers.
+
+
+
+
+
+------------------------Performance Optimization hierarchy-----------Optimize Phase 1 - Done-------
+
+
+1. Synchronous Memcpies for results. Synchronous Memcpies for Halos. Synchronous memcopies for result copied from GPU(Vec_In).
+
+2. Asynchronous Memcpies for results. Synchronous Memcpies for Halos. Synchronous memcopies for result copied from GPU(Vec_In, VecOut). (using streams)
+
+3. Asynchronous Memcpies for results. Synchronous Memcpies for Halos. Asynchronous memcopies for result copied from GPU(Vec_In, VecOut). (using streams)
+
+4. Asynchronous Memcpies for results. Synchronous Memcpies for Halos. swap pointers on Host GPU(Vec_In and Vec_out). (using streams)
+
+5. Asynchronous Memcpies for results. Asynchronous Memcpies for Halos. swap pointers on Host GPU(Vec_In and Vec_out). (using streams)
+
+6. Asynchronous Memcpies for results. Asynchronous Memcpies for Halos. swap pointers on Host GPU(Vec_In and Vec_out). (using streams)
+
+7.  Asynchronous Memcpies for results. Asynchronous Memcpies for Halos. swap pointers on Host GPU(Vec_In and Vec_out). Kernal launhes concurrently (using streams)
+
+
+------------------------Performance Optimization hierarchy-----------Optimize Phase 2 - TODO-------
+
+
+8.  Asynchronous Memcpies for results. P2P exchange for Halos. swap pointers on Host GPU(Vec_In and Vec_out). Kernal launhes concurrently (using streams)
+
+9.  Asynchronous Memcpies for results. P2P exchange for Halos using Hardware underlying topology. swap pointers on Host GPU(Vec_In and Vec_out). Kernal launhes concurrently (using streams)
+
