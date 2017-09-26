@@ -1,3 +1,4 @@
+//P2P- Single Stream Swap Memory after exchange
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "testMultiGPU_Jacobi2D_Decom.cuh"
