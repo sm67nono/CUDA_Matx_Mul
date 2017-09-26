@@ -1,4 +1,4 @@
-//P2P Synchronization using events and Seperate streams. Coupling-Overlapping exchanges with computaion.
+//P2P Synchronization using events and Seperate streams. Coupling-Overlapping several Exchanges together.
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
