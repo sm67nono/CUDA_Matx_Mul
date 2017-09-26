@@ -1,5 +1,3 @@
-//P2P with memcpy not memcpyasync
-
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "testMultiGPU_Jacobi2D_Decom.cuh"
@@ -991,7 +989,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			{
 				cudaMemcpy(x_buffer[dev], &deviceArray[dev].nHalo[0], chunk_X * sizeof(float), cudaMemcpyHostToDevice);
 			}
-			
+
 			if (deviceArray[dev].wHalo_flag == 1)
 			{
 				cudaMemcpy(y_buffer[dev], &deviceArray[dev].eHalo[0], chunk_Y * sizeof(float), cudaMemcpyHostToDevice);
@@ -1024,7 +1022,13 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	//===========Algorithm Improvement: Identify the neighbours so that they could be launched together and the exchange can take place. Without having to wait for computation across all devices============================
 
 	cudaStream_t streams[4];//Possible to declare it dynamically ? Yes. Using Vectors.
-	cudaStream_t streamsforHaloExcahnge[4];
+
+							//Create seperate streams for each Halo Exchange
+	cudaStream_t nHaloExchange[4];
+	cudaStream_t sHaloExchange[4];
+	cudaStream_t eHaloExchange[4];
+	cudaStream_t wHaloExchange[4];
+
 
 
 	//Note: Default stream for a device is always syncronizing so creating seperate streams for each device
@@ -1033,9 +1037,38 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		cudaSetDevice(i);
 		cudaStreamCreate(&streams[i]);
 		if (p2penabled) {
-			cudaStreamCreate(&streamsforHaloExcahnge[i]);
+			cudaStreamCreate(&nHaloExchange[i]);
+			cudaStreamCreate(&sHaloExchange[i]);
+			cudaStreamCreate(&eHaloExchange[i]);
+			cudaStreamCreate(&wHaloExchange[i]);
 		}
+
 	}
+
+
+	//For explicit synchornizing p2p transfers and async memcopies
+	cudaEvent_t event[4];
+
+
+	cudaEvent_t nHaloEvent[4];
+	cudaEvent_t sHaloEvent[4];
+	cudaEvent_t eHaloEvent[4];
+	cudaEvent_t wHaloEvent[4];
+
+	for (int i = 0; i < numDevices; i++)
+	{
+		cudaSetDevice(i);
+		cudaEventCreate(&event[i]);
+		if (p2penabled) {
+			cudaEventCreate(&nHaloEvent[i]);
+			cudaEventCreate(&sHaloEvent[i]);
+			cudaEventCreate(&eHaloEvent[i]);
+			cudaEventCreate(&wHaloEvent[i]);
+		}
+
+	}
+
+
 
 
 	/*Using a pagable memory first*/
@@ -1053,7 +1086,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	//Check performance
 
-	
+
 
 	high_resolution_clock::time_point t1 = high_resolution_clock::now();
 
@@ -1065,7 +1098,26 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		//cout << endl << endl << "Iteration : " << i + 1 << endl << endl << endl;
 		//TODO: optimization using kernel instead of For Loop
 		//Performance changes by launching kernal seperately
-		
+		//Synchronize streams from each device
+		//Synchronize streams from each device
+		if (p2penabled) {
+			for (int dev = 0; dev < numDevices;dev++) {
+
+				status = cudaSetDevice(dev);
+				if (status != cudaSuccess)
+				{
+					cout << "SetDevice unsuccessful exiting";
+					return status;
+				}
+
+				//Wait for kernel on this device to finish execution
+				//cudaStreamWaitEvent(streams[dev], nHaloEvent[dev], 0);
+				//cudaStreamWaitEvent(streams[dev], sHaloEvent[dev], 0);
+				//cudaStreamWaitEvent(streams[dev], eHaloEvent[dev], 0);
+				//cudaStreamWaitEvent(streams[dev], wHaloEvent[dev], 0);
+				cudaStreamSynchronize(streams[dev]);
+			}
+		}
 		for (int dev = 0; dev < numDevices;dev++)
 		{
 			status = cudaSetDevice(dev);
@@ -1075,8 +1127,12 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 				return status;
 			}
 
+
+
 			jacobi_Simple << <blocksize, threads, 0, streams[dev] >> >(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim);
 
+			//For Synchronizing while Halo Exchange start
+			cudaEventRecord(event[dev], streams[dev]);
 		}
 
 		if (auto err = cudaGetLastError())
@@ -1115,6 +1171,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 			//Store Halo positions after iteration for exchanging
 			if (!p2penabled) {
+
 				if (numDevices > 1)
 				{
 					if (deviceArray[dev].nHalo_flag == 1)
@@ -1158,7 +1215,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			}
 
 		}
-		
+
 		if (auto err = cudaGetLastError())
 		{
 			cout << "Data copy failed 2: " << cudaGetErrorString(err) << endl;
@@ -1169,14 +1226,10 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 
 		//Exchange Halos after each iteration except the last iteration
-		if ((i < (iterations-1)))
+		if ((i < (iterations - 1)))
 		{
-			
-
 
 			if ((!p2penabled)) {
-
-				//Synchronize streams from each device
 				for (int dev = 0; dev < numDevices; dev++)
 				{
 					cudaSetDevice(dev);
@@ -1259,11 +1312,26 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 						int devIDtoNorth = getDeviceIDfromCoord(getDevCoord_X + 1, getDevCoord_Y, numberOfDevicesAlong_X);
 						//Exchange Halos 
 						//Send to the device
-						cudaMemcpyPeer(x_buffer[dev], dev, d_shalos[devIDtoNorth], devIDtoNorth, chunk_X * sizeof(float));
-						//Recieve from the device
-						cudaMemcpyPeer(d_shalos[devIDtoNorth], devIDtoNorth, d_nhalos[dev], dev, chunk_X * sizeof(float));
 
-						cudaMemcpyAsync(d_nhalos[dev], x_buffer[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToDevice, streams[dev]);
+						//Wait for kernel on this device to finish execution
+						//cudaStreamWaitEvent(nHaloExchange[dev], event[dev], 0);
+						//cudaStreamWaitEvent(sHaloExchange[dev], event[dev], 0);
+						//cudaStreamWaitEvent(eHaloExchange[dev], event[dev], 0);
+						//cudaStreamWaitEvent(wHaloExchange[dev], event[dev], 0);
+
+						cudaMemcpyPeerAsync(x_buffer[dev], dev, d_shalos[devIDtoNorth], devIDtoNorth, chunk_X * sizeof(float), streams[dev]);
+						//For Synchronizing while nHalo Exchange End
+						//cudaEventRecord(nHaloEvent[dev], nHaloExchange[dev]);
+
+						//Recieve from the device
+						cudaMemcpyPeerAsync(d_shalos[devIDtoNorth], devIDtoNorth, d_nhalos[dev], dev, chunk_X * sizeof(float), streams[dev]);
+						//For Synchronizing while sHalo Exchange End
+						//cudaSetDevice(devIDtoNorth);
+						//cudaEventRecord(sHaloEvent[devIDtoNorth], sHaloExchange[devIDtoNorth]);
+
+						cudaSetDevice(dev);
+						swap(d_nhalos[dev], x_buffer[dev]);
+						
 					}
 
 					//Check if device is having a east Halo buffer
@@ -1271,19 +1339,26 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 						int devIDtoEast = getDeviceIDfromCoord(getDevCoord_X, getDevCoord_Y + 1, numberOfDevicesAlong_Y);
 						//Exchange Halos 
 						//Send to the device
-						cudaMemcpyPeer(y_buffer[dev], dev, d_whalos[devIDtoEast], devIDtoEast, chunk_Y * sizeof(float));
+						cudaMemcpyPeerAsync(y_buffer[dev], dev, d_whalos[devIDtoEast], devIDtoEast, chunk_Y * sizeof(float), streams[dev]);
 						//Recieve from the device
-						cudaMemcpyPeer(d_whalos[devIDtoEast], devIDtoEast, d_ehalos[dev], dev, chunk_Y * sizeof(float));
+						//For Synchronizing while eHalo Exchange End
+						//cudaEventRecord(eHaloEvent[dev], eHaloExchange[dev]);
 
-						cudaMemcpyAsync(d_ehalos[dev], y_buffer[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToDevice, streams[dev]);
+						cudaMemcpyPeerAsync(d_whalos[devIDtoEast], devIDtoEast, d_ehalos[dev], dev, chunk_Y * sizeof(float), streams[dev]);
+						//For Synchronizing while wHalo Exchange End
+						//cudaSetDevice(devIDtoEast);
+						//cudaEventRecord(wHaloEvent[devIDtoEast], wHaloExchange[devIDtoEast]);
 
+						cudaSetDevice(dev);
+						swap(d_ehalos[dev],y_buffer[dev]);
+						
 
 					}
 				}
 
 			}
 
-			
+
 		}
 
 
@@ -1305,17 +1380,36 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 
 
-	//Sync and Destroy streams
+	//Sync and Destroy streams and events
 	for (int i = 0; i < numDevices; ++i)
 	{
-		//Synchro the streams 
 		cudaSetDevice(i);
+
+		//Destroy Events
+		cudaEventDestroy(event[i]);
+		cudaEventDestroy(nHaloEvent[i]);
+		cudaEventDestroy(sHaloEvent[i]);
+		cudaEventDestroy(eHaloEvent[i]);
+		cudaEventDestroy(wHaloEvent[i]);
+
+
+		//Synchro the streams 
+
+
 		cudaStreamSynchronize(streams[i]);
 		cudaStreamDestroy(streams[i]);
-		if (p2penabled) {
-			cudaStreamSynchronize(streamsforHaloExcahnge[i]);
-			cudaStreamDestroy(streamsforHaloExcahnge[i]);
-		}
+
+		cudaStreamSynchronize(nHaloExchange[i]);
+		cudaStreamDestroy(nHaloExchange[i]);
+
+		cudaStreamSynchronize(sHaloExchange[i]);
+		cudaStreamDestroy(sHaloExchange[i]);
+
+		cudaStreamSynchronize(eHaloExchange[i]);
+		cudaStreamDestroy(eHaloExchange[i]);
+
+		cudaStreamSynchronize(wHaloExchange[i]);
+		cudaStreamDestroy(wHaloExchange[i]);
 	}
 
 	//Results copied to disk
@@ -1333,7 +1427,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		disableP2P(numDevices);
 	}
 
-	//Free memory on devices
+	//Free memory on device
 	for (int dev = 0; dev < numDevices; dev++)
 	{
 		cudaSetDevice(dev);
