@@ -1102,6 +1102,14 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		//Performance changes by launching kernal seperately
 		//Synchronize streams from each device
 		//Synchronize streams from each device
+		for (int dev = 0; dev < numDevices;dev++)
+		{
+			status = cudaSetDevice(dev);
+			//cudaStreamWaitEvent(streams[dev], nHaloEvent[dev], 0);
+			//cudaStreamWaitEvent(streams[dev], sHaloEvent[dev], 0);
+			//cudaStreamWaitEvent(streams[dev], eHaloEvent[dev], 0);
+			cudaStreamWaitEvent(streams[dev], wHaloEvent[dev], 0);
+		}
 		
 		for (int dev = 0; dev < numDevices;dev++)
 		{
@@ -1112,13 +1120,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 				cout << "SetDevice unsuccessful exiting";
 				return status;
 			}
-
-			cudaStreamWaitEvent(streams[dev], nHaloEvent[dev], 0);
-			cudaStreamWaitEvent(streams[dev], sHaloEvent[dev], 0);
-			cudaStreamWaitEvent(streams[dev], eHaloEvent[dev], 0);
-			cudaStreamWaitEvent(streams[dev], wHaloEvent[dev], 0);
-			
-			
 
 			jacobi_Simple <<<blocksize, threads, 0, streams[dev] >>>(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim);
 
@@ -1167,7 +1168,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 				{
 					if (deviceArray[dev].nHalo_flag == 1)
 					{
-						cudaMemcpyAsync(nHalo_pinned[dev], d_nhalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost, streams[dev]);
+						cudaStreamWaitEvent(nHaloExchange[dev], event[dev], 0);
+						cudaMemcpyAsync(nHalo_pinned[dev], d_nhalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost, nHaloExchange[dev]);
 						if (auto err = cudaGetLastError())
 						{
 							cout << "d_nhalos copy failed D2H: " << cudaGetErrorString(err) << endl;
@@ -1176,7 +1178,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 					}
 					if (deviceArray[dev].sHalo_flag == 1)
 					{
-						cudaMemcpyAsync(sHalo_pinned[dev], d_shalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost, streams[dev]);
+						cudaStreamWaitEvent(sHaloExchange[dev], event[dev], 0);
+						cudaMemcpyAsync(sHalo_pinned[dev], d_shalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost, sHaloExchange[dev]);
 						if (auto err = cudaGetLastError())
 						{
 							cout << "d_shalos copy failed D2H: " << cudaGetErrorString(err) << endl;
@@ -1185,7 +1188,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 					}
 					if (deviceArray[dev].eHalo_flag == 1)
 					{
-						cudaMemcpyAsync(eHalo_pinned[dev], d_ehalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost, streams[dev]);
+						cudaStreamWaitEvent(eHaloExchange[dev], event[dev], 0);
+						cudaMemcpyAsync(eHalo_pinned[dev], d_ehalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost, eHaloExchange[dev]);
 						if (auto err = cudaGetLastError())
 						{
 							cout << "d_ehalos copy failed D2H: " << cudaGetErrorString(err) << endl;
@@ -1194,7 +1198,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 					}
 					if (deviceArray[dev].wHalo_flag == 1)
 					{
-						cudaMemcpyAsync(wHalo_pinned[dev], d_whalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost, streams[dev]);
+						cudaStreamWaitEvent(wHaloExchange[dev], event[dev], 0);
+						cudaMemcpyAsync(wHalo_pinned[dev], d_whalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost, wHaloExchange[dev]);
 						if (auto err = cudaGetLastError())
 						{
 							cout << "d_whalos copy failed D2H " << cudaGetErrorString(err) << endl;
@@ -1247,7 +1252,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 						//Copying Halos to the device
 						if (deviceArray[dev].nHalo_flag == 1)
 						{
-							cudaMemcpyAsync(d_nhalos[dev], nHalo_pinned[dev], chunk_X * sizeof(float), cudaMemcpyHostToDevice, streams[dev]);
+							cudaMemcpyAsync(d_nhalos[dev], nHalo_pinned[dev], chunk_X * sizeof(float), cudaMemcpyHostToDevice, nHaloExchange[dev]);
 						}
 						if (auto err = cudaGetLastError())
 						{
@@ -1256,7 +1261,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 						}
 						if (deviceArray[dev].sHalo_flag == 1)
 						{
-							cudaMemcpyAsync(d_shalos[dev], sHalo_pinned[dev], chunk_X * sizeof(float), cudaMemcpyHostToDevice, streams[dev]);
+							cudaMemcpyAsync(d_shalos[dev], sHalo_pinned[dev], chunk_X * sizeof(float), cudaMemcpyHostToDevice, sHaloExchange[dev]);
 
 						}
 						if (auto err = cudaGetLastError())
@@ -1266,7 +1271,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 						}
 						if (deviceArray[dev].eHalo_flag == 1)
 						{
-							cudaMemcpyAsync(d_ehalos[dev], eHalo_pinned[dev], chunk_Y * sizeof(float), cudaMemcpyHostToDevice, streams[dev]);
+							cudaMemcpyAsync(d_ehalos[dev], eHalo_pinned[dev], chunk_Y * sizeof(float), cudaMemcpyHostToDevice, eHaloExchange[dev]);
 						}
 						if (auto err = cudaGetLastError())
 						{
@@ -1275,7 +1280,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 						}
 						if (deviceArray[dev].wHalo_flag == 1)
 						{
-							cudaMemcpyAsync(d_whalos[dev], wHalo_pinned[dev], chunk_Y * sizeof(float), cudaMemcpyHostToDevice, streams[dev]);
+							cudaMemcpyAsync(d_whalos[dev], wHalo_pinned[dev], chunk_Y * sizeof(float), cudaMemcpyHostToDevice, wHaloExchange[dev]);
 						}
 						if (auto err = cudaGetLastError())
 						{
@@ -1499,3 +1504,4 @@ int performJacobi_MultiGPU2D_Decom(unsigned int dim, unsigned int numJacobiIt, f
 	return 0;
 
 }
+
