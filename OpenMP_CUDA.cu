@@ -46,9 +46,9 @@ struct create_Device
 };
 
 //Simple Jacobi iteration
-__global__ void jacobi_Simple()//const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, float *x_in, float *x_out, const float *rhs, const int ehalo_flag, const int whalo_flag, const int nhalo_flag, const int shalo_flag, float *ehalo, float *whalo, float *nhalo, float *shalo, const int deviceID, const int numDevices, const int domain_Decom)
+__global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, float *x_in, float *x_out, const float *rhs, const int ehalo_flag, const int whalo_flag, const int nhalo_flag, const int shalo_flag, float *ehalo, float *whalo, float *nhalo, float *shalo, const int deviceID, const int numDevices, const int domain_Decom)
 {
-	/*int index = threadIdx.x + blockDim.x * blockIdx.x;
+	int index = threadIdx.x + blockDim.x * blockIdx.x;
 	float result = rhs[index];
 
 	int dim_x = blockDim.x;// dim across x
@@ -73,250 +73,250 @@ __global__ void jacobi_Simple()//const float *A0, const float *A1, const float *
 	//Halo computation for 1D Decompostion: For the First and Last GPU Halo computation on both the sides(nhalo and shalo wont be needed)
 	if (domain_Decom == 1)
 	{
-	if (numDevices > 1)
-	{
-	//First GPU
-	if (deviceID == 0) {
-	//We need to use nhalos
+		if (numDevices > 1)
+		{
+			//First GPU
+			if (deviceID == 0) {
+				//We need to use nhalos
 
-	//Carry out computations for boundary elements
-	if (index != leftBoundaryElem)
-	//Left
-	result -= A1[index] * x_in[index - 1];
+				//Carry out computations for boundary elements
+				if (index != leftBoundaryElem)
+					//Left
+					result -= A1[index] * x_in[index - 1];
 
-	if (index != rightBoundaryElem)
-	//Right
-	result -= A3[index] * x_in[index + 1];
-	if (index != bottomBoundaryElem)
-	//Bottom
-	result -= A0[index] * x_in[index - dim_x];
+				if (index != rightBoundaryElem)
+					//Right
+					result -= A3[index] * x_in[index + 1];
+				if (index != bottomBoundaryElem)
+					//Bottom
+					result -= A0[index] * x_in[index - dim_x];
 
-	if (index != topBoundaryElem)
-	//Top
-	result -= A4[index] * x_in[index + dim_x];
-	//The top boundary needs element from nhalo
-	if (index == topBoundaryElem)
-	//nHalos
-	result -= A4[index] * nhalo[y_pos];
+				if (index != topBoundaryElem)
+					//Top
+					result -= A4[index] * x_in[index + dim_x];
+				//The top boundary needs element from nhalo
+				if (index == topBoundaryElem)
+					//nHalos
+					result -= A4[index] * nhalo[y_pos];
 
-	result /= A2[index];
-	x_out[index] = result;
-
-
-	//Update Halo at the end of computation
-	if (index == topBoundaryElem)
-	//nHalos updated
-	nhalo[y_pos] = result;
-
-	return;
-
-	}
-
-	//Last GPU
-	else if (deviceID == (numDevices - 1)) {
-	//We need to use shalos
-
-	//Carry out computations for boundary elements
-	if (index != leftBoundaryElem)
-	//Left
-	result -= A1[index] * x_in[index - 1];
-
-	if (index != rightBoundaryElem)
-	//Right
-	result -= A3[index] * x_in[index + 1];
-
-	if (index != bottomBoundaryElem)
-	//Bottom
-	result -= A0[index] * x_in[index - dim_x];
-
-	//The Bottom boundary needs elements from shalo
-	if (index == bottomBoundaryElem)
-	//nHalos
-	result -= A0[index] * shalo[y_pos];
+				result /= A2[index];
+				x_out[index] = result;
 
 
-	if (index != topBoundaryElem)
-	//Top
-	result -= A4[index] * x_in[index + dim_x];
+				//Update Halo at the end of computation
+				if (index == topBoundaryElem)
+					//nHalos updated
+					nhalo[y_pos] = result;
+
+				return;
+
+			}
+
+			//Last GPU
+			else if (deviceID == (numDevices - 1)) {
+				//We need to use shalos
+
+				//Carry out computations for boundary elements
+				if (index != leftBoundaryElem)
+					//Left
+					result -= A1[index] * x_in[index - 1];
+
+				if (index != rightBoundaryElem)
+					//Right
+					result -= A3[index] * x_in[index + 1];
+
+				if (index != bottomBoundaryElem)
+					//Bottom
+					result -= A0[index] * x_in[index - dim_x];
+
+				//The Bottom boundary needs elements from shalo
+				if (index == bottomBoundaryElem)
+					//nHalos
+					result -= A0[index] * shalo[y_pos];
 
 
-	result /= A2[index];
-
-	x_out[index] = result;
-
-	//Update Halo at the end of computation
-	if (index == bottomBoundaryElem)
-	//sHalos updated
-	shalo[y_pos] = result;
-
-	return;
-
-	}
-	//For all the middle GPUs
-	else
-	{
-	//We need to use both shalos and nhalos
-
-	//Carry out computations for boundary elements
-	if (index != leftBoundaryElem)
-	//Left
-	result -= A1[index] * x_in[index - 1];
-
-	if (index != rightBoundaryElem)
-	//Right
-	result -= A3[index] * x_in[index + 1];
-
-	if (index != bottomBoundaryElem)
-	//Bottom
-	result -= A0[index] * x_in[index - dim_x];
-	//The Bottom boundary needs elements from shalo
-	if (index == bottomBoundaryElem)
-	//nHalos
-	result -= A0[index] * shalo[y_pos];
+				if (index != topBoundaryElem)
+					//Top
+					result -= A4[index] * x_in[index + dim_x];
 
 
-	if (index != topBoundaryElem)
-	//Top
-	result -= A4[index] * x_in[index + dim_x];
-	//The top boundary needs element from nhalo
-	if (index == topBoundaryElem)
-	//nHalos
-	result -= A4[index] * nhalo[y_pos];
-	result /= A2[index];
+				result /= A2[index];
 
-	x_out[index] = result;
+				x_out[index] = result;
 
-	//Update Halo at the end of computation
-	if (index == bottomBoundaryElem)
-	//sHalos updated
-	shalo[y_pos] = result;
+				//Update Halo at the end of computation
+				if (index == bottomBoundaryElem)
+					//sHalos updated
+					shalo[y_pos] = result;
 
-	//Update Halo at the end of computation
-	if (index == topBoundaryElem)
-	//nHalos updated
-	nhalo[y_pos] = result;
+				return;
 
-	return;
+			}
+			//For all the middle GPUs
+			else
+			{
+				//We need to use both shalos and nhalos
 
-	}
+				//Carry out computations for boundary elements
+				if (index != leftBoundaryElem)
+					//Left
+					result -= A1[index] * x_in[index - 1];
 
-	}
+				if (index != rightBoundaryElem)
+					//Right
+					result -= A3[index] * x_in[index + 1];
+
+				if (index != bottomBoundaryElem)
+					//Bottom
+					result -= A0[index] * x_in[index - dim_x];
+				//The Bottom boundary needs elements from shalo
+				if (index == bottomBoundaryElem)
+					//nHalos
+					result -= A0[index] * shalo[y_pos];
+
+
+				if (index != topBoundaryElem)
+					//Top
+					result -= A4[index] * x_in[index + dim_x];
+				//The top boundary needs element from nhalo
+				if (index == topBoundaryElem)
+					//nHalos
+					result -= A4[index] * nhalo[y_pos];
+				result /= A2[index];
+
+				x_out[index] = result;
+
+				//Update Halo at the end of computation
+				if (index == bottomBoundaryElem)
+					//sHalos updated
+					shalo[y_pos] = result;
+
+				//Update Halo at the end of computation
+				if (index == topBoundaryElem)
+					//nHalos updated
+					nhalo[y_pos] = result;
+
+				return;
+
+			}
+
+		}
 	}
 	else if (domain_Decom == 2) {
 
 
-	//======Left Bounday Elem
-	if (index != leftBoundaryElem)
-	//Left
-	result -= A1[index] * x_in[index - 1];
-	//Computation using the Halos
-	if (index == leftBoundaryElem) {
-	if (whalo_flag == 1) {
-	result -= A1[index] * whalo[x_pos];
-	}
-	}
+		//======Left Bounday Elem
+		if (index != leftBoundaryElem)
+			//Left
+			result -= A1[index] * x_in[index - 1];
+		//Computation using the Halos
+		if (index == leftBoundaryElem) {
+			if (whalo_flag == 1) {
+				result -= A1[index] * whalo[x_pos];
+			}
+		}
 
-	//======Right Bounday Elem
-	if (index != rightBoundaryElem)
-	//Right
-	result -= A3[index] * x_in[index + 1];
-	if (index == rightBoundaryElem) {
-	if (ehalo_flag == 1) {
-	result -= A3[index] * ehalo[x_pos];
-	}
-	}
-
-
-	//======Bottom Bounday Elem
-	if (index != bottomBoundaryElem)
-	//Bottom
-	result -= A0[index] * x_in[index - dim_x];
-
-	if (index == bottomBoundaryElem) {
-	if (shalo_flag == 1) {
-	result -= A0[index] * shalo[y_pos];
-	}
-	}
+		//======Right Bounday Elem
+		if (index != rightBoundaryElem)
+			//Right
+			result -= A3[index] * x_in[index + 1];
+		if (index == rightBoundaryElem) {
+			if (ehalo_flag == 1) {
+				result -= A3[index] * ehalo[x_pos];
+			}
+		}
 
 
-	//======Top Bounday Elem
-	if (index != topBoundaryElem)
-	//Top
-	result -= A4[index] * x_in[index + dim_x];
-	if (index == topBoundaryElem) {
-	if (nhalo_flag == 1) {
-	result -= A4[index] * nhalo[y_pos];
-	}
-	}
+		//======Bottom Bounday Elem
+		if (index != bottomBoundaryElem)
+			//Bottom
+			result -= A0[index] * x_in[index - dim_x];
+
+		if (index == bottomBoundaryElem) {
+			if (shalo_flag == 1) {
+				result -= A0[index] * shalo[y_pos];
+			}
+		}
 
 
-
-
-
-	result /= A2[index];
-
-	x_out[index] = result;
+		//======Top Bounday Elem
+		if (index != topBoundaryElem)
+			//Top
+			result -= A4[index] * x_in[index + dim_x];
+		if (index == topBoundaryElem) {
+			if (nhalo_flag == 1) {
+				result -= A4[index] * nhalo[y_pos];
+			}
+		}
 
 
 
 
-	//Updating Halos at the End of the computation
-	if (index == topBoundaryElem) {
-	if (nhalo_flag == 1) {
-	nhalo[y_pos] = result;
-	}
-	}
 
-	if (index == bottomBoundaryElem) {
-	if (shalo_flag == 1) {
-	shalo[y_pos] = result;
-	}
-	}
+		result /= A2[index];
 
-	if (index == leftBoundaryElem) {
-	if (whalo_flag == 1) {
-	whalo[x_pos] = result;
-	}
-	}
+		x_out[index] = result;
 
-	if (index == rightBoundaryElem) {
-	if (ehalo_flag == 1) {
-	ehalo[x_pos] = result;
-	}
-	}
-	return;
+
+
+
+		//Updating Halos at the End of the computation
+		if (index == topBoundaryElem) {
+			if (nhalo_flag == 1) {
+				nhalo[y_pos] = result;
+			}
+		}
+
+		if (index == bottomBoundaryElem) {
+			if (shalo_flag == 1) {
+				shalo[y_pos] = result;
+			}
+		}
+
+		if (index == leftBoundaryElem) {
+			if (whalo_flag == 1) {
+				whalo[x_pos] = result;
+			}
+		}
+
+		if (index == rightBoundaryElem) {
+			if (ehalo_flag == 1) {
+				ehalo[x_pos] = result;
+			}
+		}
+		return;
 
 	}
 	//For computations on a Machine with a single GPU
 	else
 	{
-	{//For some reason order of computation (left,right,top and bottom) gives a different result
+		{//For some reason order of computation (left,right,top and bottom) gives a different result
 
-	//Carry out computations for boundary elements
-	if (index != leftBoundaryElem)
-	//Left
-	result -= A1[index] * x_in[index - 1];
+		//Carry out computations for boundary elements
+			if (index != leftBoundaryElem)
+				//Left
+				result -= A1[index] * x_in[index - 1];
 
-	if (index != rightBoundaryElem)
-	//Right
-	result -= A3[index] * x_in[index + 1];
-	if (index != bottomBoundaryElem)
-	//Bottom
-	result -= A0[index] * x_in[index - dim_x];
+			if (index != rightBoundaryElem)
+				//Right
+				result -= A3[index] * x_in[index + 1];
+			if (index != bottomBoundaryElem)
+				//Bottom
+				result -= A0[index] * x_in[index - dim_x];
 
-	if (index != topBoundaryElem)
-	//Top
-	result -= A4[index] * x_in[index + dim_x];
+			if (index != topBoundaryElem)
+				//Top
+				result -= A4[index] * x_in[index + dim_x];
 
 
 
-	result /= A2[index];
+			result /= A2[index];
 
-	x_out[index] = result;
+			x_out[index] = result;
 
-	return;
+			return;
+		}
 	}
-	}*/
 
 }
 
@@ -1070,8 +1070,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	}
 
-
-
+	//For testing with and without p2p
+	//p2penabled = false;
 
 	/*Using a pagable memory first*/
 	//std::vector<float> partial_resultOnHost(chunk_X * chunk_Y);
@@ -1090,203 +1090,411 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	cudaError_t status = cudaGetLastError();
 
-	high_resolution_clock::time_point t1 = high_resolution_clock::now();
+
 
 	//MultiThreaded Host to minimize kernel launch latency :  using openMP
-	
-	
 
-	omp_set_num_threads(numDevices);
+	high_resolution_clock::time_point t1 = high_resolution_clock::now();
 
-	
-
-	for (int i = 0; i < iterations; i++)
+	#pragma omp parallel num_threads(numDevices) 
 	{
-
-		//cout << endl << endl << "Iteration : " << i + 1 << endl << endl << endl;
-		//TODO: optimization using kernel instead of For Loop
-		//Performance changes by launching kernal seperately
-		//Synchronize streams from each device
-		//Synchronize streams from each device
+		int dev = omp_get_thread_num();
+		cudaSetDevice(dev);
+		//cudaSetDevice(omp_get_thread_num());
+		//#pragma omp barrier
 
 
-		#pragma omp parallel for // num_threads(numDevices)	
+		for (int i = 0; i < iterations; i++)
+		{
+			
+			jacobi_Simple <<<blocksize, threads, 0, streams[dev] >>> (d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim);
+			//For Synchronizing while Halo Exchange start
+			cudaEventRecord(event[dev], streams[dev]);
+
+			//#pragma omp barrier
+
+			if (auto err = cudaGetLastError())
+			{
+				cout << "Kernal Execution failed: " << cudaGetErrorString(err) << " Iteration :" << i << endl;
+				//return err;
+			}
+
+
+
+			//==================================CPU Side computation Begins=================================================================================
+
+			if (i == (iterations - 1))//Copy the results just for the final iteration
+			{
+				cudaMemcpyAsync(&partial_resultOnHost[dev][0], d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost, streams[dev]);
+			}
+
+			//Store Halo positions after iteration for exchanging
+			if (!p2penabled) {
+
+				if (numDevices > 1)
+				{
+					if (deviceArray[dev].nHalo_flag == 1)
+					{
+						//cudaStreamWaitEvent(nHaloExchange[dev], event[dev], 0);
+						cudaMemcpyAsync(nHalo_pinned[dev], d_nhalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost, nHaloExchange[dev]);
+						if (auto err = cudaGetLastError())
+						{
+							cout << "d_nhalos copy failed D2H: " << cudaGetErrorString(err) << endl;
+							//return err;
+						}
+					}
+					if (deviceArray[dev].sHalo_flag == 1)
+					{
+						//cudaStreamWaitEvent(sHaloExchange[dev], event[dev], 0);
+						cudaMemcpyAsync(sHalo_pinned[dev], d_shalos[dev], chunk_X * sizeof(float), cudaMemcpyDeviceToHost, sHaloExchange[dev]);
+						if (auto err = cudaGetLastError())
+						{
+							cout << "d_shalos copy failed D2H: " << cudaGetErrorString(err) << endl;
+							//return err;
+						}
+					}
+					if (deviceArray[dev].eHalo_flag == 1)
+					{
+						//cudaStreamWaitEvent(eHaloExchange[dev], event[dev], 0);
+						cudaMemcpyAsync(eHalo_pinned[dev], d_ehalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost, eHaloExchange[dev]);
+						if (auto err = cudaGetLastError())
+						{
+							cout << "d_ehalos copy failed D2H: " << cudaGetErrorString(err) << endl;
+							//return err;
+						}
+					}
+					if (deviceArray[dev].wHalo_flag == 1)
+					{
+						//cudaStreamWaitEvent(wHaloExchange[dev], event[dev], 0);
+						cudaMemcpyAsync(wHalo_pinned[dev], d_whalos[dev], chunk_Y * sizeof(float), cudaMemcpyDeviceToHost, wHaloExchange[dev]);
+						if (auto err = cudaGetLastError())
+						{
+							cout << "d_whalos copy failed D2H " << cudaGetErrorString(err) << endl;
+							//return err;
+						}
+					}
+
+				}
+			}
+
+
+
+
+			//Swap input and output vectors and Exchanging Halos Here using P2P---- Except for the last iteration
+
+			if ((i < (iterations - 1)))
+			{
+
+
+
+				if ((!p2penabled)) {
+					cudaStreamSynchronize(streams[dev]);
+					if (auto err = cudaGetLastError())
+					{
+						cout << "Stream " << dev << " synchronize error  for iteration : " << i << ". ERROR IS: " << cudaGetErrorString(err) << endl;
+						//return err;
+					}
+
+
+					bool exchangeComplete = false;
+					//Note: Using Pinned memory on Host for Halos -> Performance Approach 1
+
+					//exchangehalos_onHost(numDevices, deviceArray, numberOfDevicesAlong_X);
+					exchangeComplete = exchangehalos_onHostPinned(numDevices, deviceArray, numberOfDevicesAlong_X, nHalo_pinned, sHalo_pinned, eHalo_pinned, wHalo_pinned);
+					if (exchangeComplete) {
+
+						swap(d_Vec_In[dev], d_Vec_Out[dev]);
+						//Copying Halos to the device
+						if (deviceArray[dev].nHalo_flag == 1)
+						{
+							cudaMemcpyAsync(d_nhalos[dev], nHalo_pinned[dev], chunk_X * sizeof(float), cudaMemcpyHostToDevice, nHaloExchange[dev]);
+						}
+						if (auto err = cudaGetLastError())
+						{
+							cout << "d_nhalos copy failed H2D: " << cudaGetErrorString(err) << endl;
+							//return err;
+						}
+						if (deviceArray[dev].sHalo_flag == 1)
+						{
+							cudaMemcpyAsync(d_shalos[dev], sHalo_pinned[dev], chunk_X * sizeof(float), cudaMemcpyHostToDevice, sHaloExchange[dev]);
+
+						}
+						if (auto err = cudaGetLastError())
+						{
+							cout << "d_shalos copy failed H2D: " << cudaGetErrorString(err) << endl;
+							//return err;
+						}
+						if (deviceArray[dev].eHalo_flag == 1)
+						{
+							cudaMemcpyAsync(d_ehalos[dev], eHalo_pinned[dev], chunk_Y * sizeof(float), cudaMemcpyHostToDevice, eHaloExchange[dev]);
+						}
+						if (auto err = cudaGetLastError())
+						{
+							cout << "d_ehalos copy failed H2D: " << cudaGetErrorString(err) << endl;
+							//return err;
+						}
+						if (deviceArray[dev].wHalo_flag == 1)
+						{
+							cudaMemcpyAsync(d_whalos[dev], wHalo_pinned[dev], chunk_Y * sizeof(float), cudaMemcpyHostToDevice, wHaloExchange[dev]);
+						}
+						if (auto err = cudaGetLastError())
+						{
+							cout << "d_whalos copy failed H2D: " << cudaGetErrorString(err) << endl;
+							//return err;
+						}
+
+					}
+				}
+
+
+
+				//If p2p is enabled then the following else block gets executed
+				else {
+
+					int getDevCoord_X = deviceArray[dev].devicePosition_X;
+					int getDevCoord_Y = deviceArray[dev].devicePosition_Y;
+
+
+					//Check if device is having a north Halo buffer
+					if (deviceArray[dev].nHalo_flag == 1)
+					{
+						int devIDtoNorth = getDeviceIDfromCoord(getDevCoord_X + 1, getDevCoord_Y, numberOfDevicesAlong_X);
+						//Exchange Halos 
+
+						//Send to the device
+						cudaStreamWaitEvent(nHaloExchange[dev], event[dev], 0);
+						cudaMemcpyPeerAsync(x_buffer[dev], dev, d_shalos[devIDtoNorth], devIDtoNorth, chunk_X * sizeof(float), nHaloExchange[dev]);
+						cudaEventRecord(nHaloEvent[dev], nHaloExchange[dev]);
+
+						//Recieve from the device
+						cudaStreamWaitEvent(sHaloExchange[dev], event[dev], 0);
+						cudaMemcpyPeerAsync(d_shalos[devIDtoNorth], devIDtoNorth, d_nhalos[dev], dev, chunk_X * sizeof(float), sHaloExchange[dev]);
+						cudaEventRecord(sHaloEvent[dev], sHaloExchange[dev]);
+
+
+
+
+					}
+
+					//Check if device is having a east Halo buffer
+					if (deviceArray[dev].eHalo_flag == 1) {
+						int devIDtoEast = getDeviceIDfromCoord(getDevCoord_X, getDevCoord_Y + 1, numberOfDevicesAlong_Y);
+						//Exchange Halos 
+
+						//Send to the device
+						cudaStreamWaitEvent(eHaloExchange[dev], event[dev], 0);
+						cudaMemcpyPeerAsync(y_buffer[dev], dev, d_whalos[devIDtoEast], devIDtoEast, chunk_Y * sizeof(float), eHaloExchange[dev]);
+						cudaEventRecord(eHaloEvent[dev], eHaloExchange[dev]);
+
+						//Recieve from the device
+						cudaStreamWaitEvent(wHaloExchange[dev], event[dev], 0);
+						cudaMemcpyPeerAsync(d_whalos[devIDtoEast], devIDtoEast, d_ehalos[dev], dev, chunk_Y * sizeof(float), wHaloExchange[dev]);
+						cudaEventRecord(wHaloEvent[dev], wHaloExchange[dev]);
+
+
+
+
+					}
+
+
+					//Synchronize streams and carry out swap of vectors
+
+					//----------------Hard Synchronization-----------------------
+					//cudaStreamSynchronize(nHaloExchange[dev]);
+					//cudaStreamSynchronize(sHaloExchange[dev]);
+					//cudaStreamSynchronize(eHaloExchange[dev]);
+					//cudaStreamSynchronize(wHaloExchange[dev]);
+
+
+					//cudaDeviceSynchronize(); ---> Works always but costs heavily on performance
+					//------------------------------------------------------------
+
+
+
+
+					//Using event syncronization
+					//cudaEventSynchronize(event[dev]);      //Could be troublesome if HaloExchanges(transfers) take longer: So far provides correct results
+					//cudaStreamSynchronize(streams[dev]); 
+
+					cudaEventSynchronize(event[dev]);
+
+					swap(d_Vec_In[dev], d_Vec_Out[dev]);
+
+
+					if (deviceArray[dev].nHalo_flag == 1)
+						swap(d_nhalos[dev], x_buffer[dev]);
+
+					if (deviceArray[dev].eHalo_flag == 1)
+						swap(d_ehalos[dev], y_buffer[dev]);
+
+
+
+
+				}
+
+				//==================================CPU Side computation Ends=================================================================================
+			#pragma omp barrier
+
+			}
+		}
+	}
+		//cout << "No if threads currently: " << omp_get_num_threads() << endl;
+
+
+
+
+
+
+		if (auto err = cudaGetLastError())
+		{
+			cout << "Data copy failed 3: " << cudaGetErrorString(err) << endl;
+			return err;
+		}
+
+		high_resolution_clock::time_point t2 = high_resolution_clock::now();
+
+		auto duration = duration_cast<microseconds>(t2 - t1).count();
+
+		cout << endl << "Iterations successful. Time taken  in microseconds :" << duration << endl;
+
+
+
+		//Sync and Destroy streams and events
+		for (int i = 0; i < numDevices; ++i)
+		{
+			cudaSetDevice(i);
+
+			//Destroy Events
+			cudaEventSynchronize(event[i]);
+			cudaEventDestroy(event[i]);
+
+			cudaEventSynchronize(nHaloEvent[i]);
+			cudaEventDestroy(nHaloEvent[i]);
+
+			cudaEventSynchronize(sHaloEvent[i]);
+			cudaEventDestroy(sHaloEvent[i]);
+
+			cudaEventSynchronize(eHaloEvent[i]);
+			cudaEventDestroy(eHaloEvent[i]);
+
+			cudaEventSynchronize(wHaloEvent[i]);
+			cudaEventDestroy(wHaloEvent[i]);
+
+
+			//Synchro the streams 
+
+
+			cudaStreamSynchronize(streams[i]);
+			cudaStreamDestroy(streams[i]);
+
+			cudaStreamSynchronize(nHaloExchange[i]);
+			cudaStreamDestroy(nHaloExchange[i]);
+
+			cudaStreamSynchronize(sHaloExchange[i]);
+			cudaStreamDestroy(sHaloExchange[i]);
+
+			cudaStreamSynchronize(eHaloExchange[i]);
+			cudaStreamDestroy(eHaloExchange[i]);
+
+			cudaStreamSynchronize(wHaloExchange[i]);
+			cudaStreamDestroy(wHaloExchange[i]);
+		}
+
+		//Results copied to disk
 		for (int dev = 0; dev < numDevices; dev++)
 		{
-			//int dev = omp_get_thread_num();
-			//cudaSetDevice(cpuid);
-			cout<<dev<<" "<<omp_get_num_threads();
-			
-			//status = cudaSetDevice(dev);
-			//cout<<dev;
-			//if (status != cudaSuccess)
-			//{
-				//cout << "SetDevice unsuccessful";
-				//return status;
-			//}
-
-			//jacobi_Simple << <blocksize, threads, 0, streams[dev] >> > ();// (d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim);
+			sendToPrint(&partial_resultOnHost[dev][0], deviceArray[dev].devicePosition_X, deviceArray[dev].devicePosition_Y, numberOfDevicesAlong_X, chunk_X, chunk_Y, dim, size, result, numDevices, iterations - 1, iterations);
 		}
-		//For Synchronizing while Halo Exchange start
-		//cudaEventRecord(event[dev], streams[dev]);
-		cout<<"No if threads currenty: "<<omp_get_num_threads()<<endl;
-		
+
+
+
+		//==========================================Performance using CUDA stream ends===========================================================================
+
+		//Done in phase 2 of development: Disble P2P across devices
+		if (p2penabled) {
+			disableP2P(numDevices);
+		}
+
+		//Free memory on device
+		for (int dev = 0; dev < numDevices; dev++)
+		{
+			cudaSetDevice(dev);
+
+			cudaFree(d_A0[dev]);
+			cudaFree(d_A1[dev]);
+			cudaFree(d_A2[dev]);
+			cudaFree(d_A3[dev]);
+			cudaFree(d_A4[dev]);
+			cudaFree(d_Vec_In[dev]);
+			cudaFree(d_Vec_Out[dev]);
+			cudaFree(d_nhalos[dev]);
+			cudaFree(d_shalos[dev]);
+			cudaFree(d_ehalos[dev]);
+			cudaFree(d_whalos[dev]);
+			cudaFree(d_Rhs[dev]);
+			cudaFreeHost(partial_resultOnHost[dev]);
+			cudaFreeHost(nHalo_pinned[dev]);
+			cudaFreeHost(sHalo_pinned[dev]);
+			cudaFreeHost(wHalo_pinned[dev]);
+			cudaFreeHost(eHalo_pinned[dev]);
+			cudaDeviceReset();
+		}
+
+
+		cout << endl << "Device Memory free successful." << endl;
+		//Take care of dynamic mem location
+		//delete[] domainDivision;
+
+		return cudaSuccess;
+
+
 	}
 
 
-	
-
-
-	if (auto err = cudaGetLastError())
+	int performJacobi_MultiGPU2D_Decom(unsigned int dim, unsigned int numJacobiIt, float* A0, float* A1, float* A2, float* A3, float* A4, float* rhs, float* x_in)
 	{
-		cout << "Data copy failed 3: " << cudaGetErrorString(err) << endl;
-		return err;
+		cudaError_t cudaStatus = performMultiGPUJacobi(dim, numJacobiIt, &A0[0], &A1[0], &A2[0], &A3[0], &A4[0], &rhs[0], &x_in[0]);
+
+
+		/*
+
+		//Testing OpenMP here
+
+		//Fork a team of threads giving them their own copies of variables
+
+		#pragma omp parallel for num_threads(4)
+		for (int i=0; i < 4; i++)
+		{
+
+
+		// Obtain thread number
+		int tid = omp_get_thread_num();
+		printf("Hello World from thread = %d\n", tid);
+
+		// Only master thread does this
+		if (tid == 0)
+		{
+		int nthreads = omp_get_num_threads();
+		printf("Number of threads = %d\n", nthreads);
+		}
+
+		}
+
+		//All threads join master thread and disband
+
+		*/
+
+		if (cudaStatus != cudaSuccess) {
+			cout << "Computation failed: " << endl;
+			return 1;
+		}
+
+
+		if (cudaStatus != cudaSuccess) {
+			cout << "Cuda Device Reset failed: " << endl;
+			return 1;
+		}
+
+		return 0;
+
 	}
-
-	high_resolution_clock::time_point t2 = high_resolution_clock::now();
-
-	auto duration = duration_cast<microseconds>(t2 - t1).count();
-
-	cout << endl << "Iterations successful. Time taken  in microseconds :" << duration << endl;
-
-
-
-	//Sync and Destroy streams and events
-	for (int i = 0; i < numDevices; ++i)
-	{
-		cudaSetDevice(i);
-
-		//Destroy Events
-		cudaEventSynchronize(event[i]);
-		cudaEventDestroy(event[i]);
-
-		cudaEventSynchronize(nHaloEvent[i]);
-		cudaEventDestroy(nHaloEvent[i]);
-
-		cudaEventSynchronize(sHaloEvent[i]);
-		cudaEventDestroy(sHaloEvent[i]);
-
-		cudaEventSynchronize(eHaloEvent[i]);
-		cudaEventDestroy(eHaloEvent[i]);
-
-		cudaEventSynchronize(wHaloEvent[i]);
-		cudaEventDestroy(wHaloEvent[i]);
-
-
-		//Synchro the streams 
-
-
-		cudaStreamSynchronize(streams[i]);
-		cudaStreamDestroy(streams[i]);
-
-		cudaStreamSynchronize(nHaloExchange[i]);
-		cudaStreamDestroy(nHaloExchange[i]);
-
-		cudaStreamSynchronize(sHaloExchange[i]);
-		cudaStreamDestroy(sHaloExchange[i]);
-
-		cudaStreamSynchronize(eHaloExchange[i]);
-		cudaStreamDestroy(eHaloExchange[i]);
-
-		cudaStreamSynchronize(wHaloExchange[i]);
-		cudaStreamDestroy(wHaloExchange[i]);
-	}
-
-	//Results copied to disk
-	for (int dev = 0; dev < numDevices; dev++)
-	{
-		sendToPrint(&partial_resultOnHost[dev][0], deviceArray[dev].devicePosition_X, deviceArray[dev].devicePosition_Y, numberOfDevicesAlong_X, chunk_X, chunk_Y, dim, size, result, numDevices, iterations - 1, iterations);
-	}
-
-
-
-	//==========================================Performance using CUDA stream ends===========================================================================
-
-	//Done in phase 2 of development: Disble P2P across devices
-	if (p2penabled) {
-		disableP2P(numDevices);
-	}
-
-	//Free memory on device
-	for (int dev = 0; dev < numDevices; dev++)
-	{
-		cudaSetDevice(dev);
-
-		cudaFree(d_A0[dev]);
-		cudaFree(d_A1[dev]);
-		cudaFree(d_A2[dev]);
-		cudaFree(d_A3[dev]);
-		cudaFree(d_A4[dev]);
-		cudaFree(d_Vec_In[dev]);
-		cudaFree(d_Vec_Out[dev]);
-		cudaFree(d_nhalos[dev]);
-		cudaFree(d_shalos[dev]);
-		cudaFree(d_ehalos[dev]);
-		cudaFree(d_whalos[dev]);
-		cudaFree(d_Rhs[dev]);
-		cudaFreeHost(partial_resultOnHost[dev]);
-		cudaFreeHost(nHalo_pinned[dev]);
-		cudaFreeHost(sHalo_pinned[dev]);
-		cudaFreeHost(wHalo_pinned[dev]);
-		cudaFreeHost(eHalo_pinned[dev]);
-		cudaDeviceReset();
-	}
-
-
-	cout << endl << "Device Memory free successful." << endl;
-	//Take care of dynamic mem location
-	//delete[] domainDivision;
-
-	return cudaSuccess;
-
-
-}
-
-
-int performJacobi_MultiGPU2D_Decom(unsigned int dim, unsigned int numJacobiIt, float* A0, float* A1, float* A2, float* A3, float* A4, float* rhs, float* x_in)
-{
-	cudaError_t cudaStatus = performMultiGPUJacobi(dim, numJacobiIt, &A0[0], &A1[0], &A2[0], &A3[0], &A4[0], &rhs[0], &x_in[0]);
-
-	
-	/* 
-	
-	//Testing OpenMP here
-	
-	//Fork a team of threads giving them their own copies of variables 
-	
-	#pragma omp parallel for num_threads(4)	
-	for (int i=0; i < 4; i++)
-	{
-	
-
- 		// Obtain thread number 
- 		int tid = omp_get_thread_num();
- 		printf("Hello World from thread = %d\n", tid);
-
- 		// Only master thread does this 
- 		if (tid == 0) 
- 		{
-  			int nthreads = omp_get_num_threads();
-			printf("Number of threads = %d\n", nthreads);
- 		}
-
- 	} 
-	
-	 //All threads join master thread and disband 
-	 
-	 */
-
-	if (cudaStatus != cudaSuccess) {
-		cout << "Computation failed: " << endl;
-		return 1;
-	}
-
-
-	if (cudaStatus != cudaSuccess) {
-		cout << "Cuda Device Reset failed: " << endl;
-		return 1;
-	}
-
-	return 0;
-
-}
