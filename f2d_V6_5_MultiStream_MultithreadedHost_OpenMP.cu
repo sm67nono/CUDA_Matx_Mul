@@ -1193,7 +1193,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			//Exchange Halos after each iteration except the last iteration
 			if ((i < (iterations - 1)))
 			{
-				cudaStreamSynchronize(streams[dev]);
+				//cudaStreamSynchronize(streams[dev]);
+				cudaDeviceSynchronize();
 
 				if ((!p2penabled)) {
 
@@ -1348,7 +1349,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 			}
 
-			cudaDeviceSynchronize();
+			
 			#pragma omp barrier
 
 		}
