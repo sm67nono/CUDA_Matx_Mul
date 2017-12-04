@@ -53,3 +53,4 @@ Repeat the same in 3D
 ------------------------Performance Optimization hierarchy-----------Optimize Phase 3 - Done-------
 
 10. Asynchronous Memcpies for results. Single host thread per device(using OpenMP) P2P exchange for Halos. swap pointers on Host GPU(Vec_In and Vec_out). Kernal launhes concurrently (using streams).
+11. Use seperate read/Write buffer for exchanging halos to the above version.
