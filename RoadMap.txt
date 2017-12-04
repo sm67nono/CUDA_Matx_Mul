@@ -43,10 +43,13 @@ Repeat the same in 3D
 7.  Asynchronous Memcpies for results. Asynchronous Memcpies for Halos. swap pointers on Host GPU(Vec_In and Vec_out). Kernal launhes concurrently (using streams)
 
 
-------------------------Performance Optimization hierarchy-----------Optimize Phase 2 - TODO-------
+------------------------Performance Optimization hierarchy-----------Optimize Phase 2 - Done-------
 
 
 8.  Asynchronous Memcpies for results. P2P exchange for Halos. swap pointers on Host GPU(Vec_In and Vec_out). Kernal launhes concurrently (using streams)
 
 9.  Asynchronous Memcpies for results. P2P exchange for Halos using Hardware underlying topology. swap pointers on Host GPU(Vec_In and Vec_out). Kernal launhes concurrently (using streams)
 
+------------------------Performance Optimization hierarchy-----------Optimize Phase 3 - Done-------
+
+10. Asynchronous Memcpies for results. Single host thread per device(using OpenMP) P2P exchange for Halos. swap pointers on Host GPU(Vec_In and Vec_out). Kernal launhes concurrently (using streams).
