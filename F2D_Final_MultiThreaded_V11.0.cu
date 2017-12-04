@@ -1,5 +1,6 @@
 //P2P Synchronization using events and Seperate streams. Coupling-Overlapping several Exchanges together.
 #include <omp.h>
+#include "tinyxml.h"
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "testMultiGPU_Jacobi2D_Decom.cuh"
@@ -9,6 +10,7 @@
 #include <vector>
 #include <fstream>
 #include <vector_types.h>
+
 
 
 #define IMUL(a,b) __mul24(a,b)
@@ -352,6 +354,41 @@ __global__ void jacobi_Simple(const float *A0, const float *A1, const float *A2,
 
 
 //========================MultiGPU utility functions============================================================================
+// load the named file and dump its structure to STDOUT
+void getConfiguration(const char* pFilename, int &numDevices, int &domain_decom)
+{
+	TiXmlDocument doc(pFilename);
+	bool loadOkay = doc.LoadFile();
+	if (loadOkay)
+	{
+		cout <<"\nFile Loaded successfully\n" ;
+
+		TiXmlElement *pRoot = doc.RootElement();
+		TiXmlElement *element = pRoot->FirstChildElement();
+		while (element)
+		{
+			string elementName = element->Value();
+			string attribute = element->Attribute("name"); //Gets you the time variable
+			string value = element->GetText();
+			cout << "\n The attribute is "<<attribute;
+			cout << "\n The elementName is " << elementName;
+			cout << "\n The element Value is " << value;
+			if (attribute=="numDevices") {
+				numDevices = stoi(value);
+			}
+			if (attribute == "decomposition") {
+				domain_decom = stoi(value);
+			}
+			element = element->NextSiblingElement();
+		}
+
+
+	}
+	else
+	{
+		cout << "\nCould not load config file\n";
+	}
+}
 
 void checkP2Paccess(int numGPUs)
 {
@@ -810,6 +847,15 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	cudaGetDeviceCount(&numDevices);
 	//numDevices = 2;
 
+	//Set Decomposition dimension 1D or 2D: when decomposition is 0. Computation happens on a single GPU
+	int decom_Dim = 2;
+
+	//Set Values for Domain Decompostion type 1D or 2D
+	int domainDecom_Dim = decom_Dim;
+
+	//Read the custom config defined in file "multiGPUConfig.xml"
+	getConfiguration("multiGPUConfig.xml", numDevices, domainDecom_Dim);
+
 
 	cout << endl << "Total number of Devices in the System are :  " << numDevices << endl;
 
@@ -848,13 +894,11 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	int numberOfDevicesAlong_X = 1;
 	int numberOfDevicesAlong_Y = 1;
 
-	//Set Values for Domain Decompostion type 1D or 2D
-	int domainDecom_Dim = 2;
+	
 	generateGPUGRID(numDevices, numberOfDevicesAlong_X, numberOfDevicesAlong_Y, domainDecom_Dim);
 	cout << "GPU grid structure is : " << numberOfDevicesAlong_X << " X " << numberOfDevicesAlong_Y << endl;
 
-	//Set Decomposition dimension 1D or 2D: when decomposition is 0. Computation happens on a single GPU
-	int decom_Dim = 2;
+	
 
 	//Total elements along each dim in 2D
 	int chunk_X = dim / numberOfDevicesAlong_X;
@@ -1075,8 +1119,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		}
 
 
-		
-
 
 		if (auto err = cudaGetLastError())
 		{
@@ -1088,14 +1130,10 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		//Initial Exchange Halos: Then do intial cudaMemcopies
 
 		
-		
-
 
 		exchangehalos_onHost(numDevices, deviceArray, numberOfDevicesAlong_X);
 
-		
-		
-
+	
 		for (int dev = 0; dev < numDevices; dev++)
 		{
 			cudaSetDevice(dev);
@@ -1161,9 +1199,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 
 	
-
-
-	
 	//=================================Domain Decomposition Logic Ends =================================================================
 
 
@@ -1177,9 +1212,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	dim3 block(BLOCKSIZE_X, BLOCKSIZE_Y);
 	dim3 grid(DIVRND(myDim.x, BLOCKSIZE_X), DIVRND(myDim.y, BLOCKSIZE_Y));
-
-
-
 
 
 	//==================================================================================================================================
