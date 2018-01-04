@@ -65,8 +65,35 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 	int3 pos = get3DPosition(tid, dim);
 
 	//Checking for depth boundary of the 3D data
-	//if (pos.z >= dim.z - 1)
-		//return;
+	if ((pos.z >= dim.z - 1) || pos.z == 0)
+		return;
+
+	//Checking for the bounding box 
+
+
+	if (pos.x == 0 && whalo_flag==0)//west halos
+	{
+		return;
+
+	}
+	if (pos.x >= dim.x - 1 && ehalo_flag==0)//East halos
+	{
+		return;
+
+	}
+	if (pos.y == 0 && shalo_flag==0)//South Halos
+	{
+
+		return;
+
+	}
+	if (pos.y >= dim.y - 1 && nhalo_flag==0)//North halos
+	{
+
+		return;
+
+	}
+
 
 	int x1 = getLinearIndex(pos.x + 1, pos.y, pos.z, dim);
 	int x0 = getLinearIndex(pos.x - 1, pos.y, pos.z, dim);
@@ -444,7 +471,7 @@ void initHalos3D(create_Device &device, int chunk_X, int chunk_Y, int chunk_Z, f
 	//int rowEndPosNorth = rowEndPos;
 	//int rowEndPosSouth = rowEndPos;
 
-	cout << endl << "Device ID " << device.deviceID<<endl;
+	//cout << endl << "Device ID " << device.deviceID<<endl;
 	//Checks provided for Boundary devices in GPU topology
 	if ((device.devicePosition_X - 1) >= 0) {
 		//cout << "West Halo needed ";
@@ -1304,12 +1331,12 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 			jacobi_Simple3D <<<grid, block, 0, streams[dev] >>> (d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_A5[dev], d_A6[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim, myDim);
 
-			cudaMemcpy(&partial_resultOnHost[dev][0], d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+			//cudaMemcpy(&partial_resultOnHost[dev][0], d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
 
 
 			//Check the partial result
 
-			int si = chunk_X*chunk_Y*chunk_Z;
+			/*int si = chunk_X*chunk_Y*chunk_Z;
 			cout << "For device :" << dev << endl;
 			for (int i = si-1; i >=0; i--) {
 
@@ -1325,7 +1352,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 				}
 
 				cout << partial_resultOnHost[dev][i] << " ";
-			}
+			}*/
 
 
 			//For Synchronizing while Halo Exchange start
