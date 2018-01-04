@@ -65,8 +65,8 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 	int3 pos = get3DPosition(tid, dim);
 
 	//Checking for depth boundary of the 3D data
-	if (pos.z >= dim.z - 1)
-		return;
+	//if (pos.z >= dim.z - 1)
+		//return;
 
 	int x1 = getLinearIndex(pos.x + 1, pos.y, pos.z, dim);
 	int x0 = getLinearIndex(pos.x - 1, pos.y, pos.z, dim);
@@ -81,11 +81,15 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 
 	// Check GPU boundary and use halos for computation
 
+
 	if (pos.x == 0)//west halos
 	{
 		if(whalo_flag==1)
 		{
-			x_out[tid] = tid;
+			// Important:Retrieve the position from wHalo
+			int getHaloPos = tid / dim.x;
+			result -= A4[tid] * whalo[getHaloPos];
+			x_out[tid] =result;
 			
 		}
 		
@@ -99,7 +103,11 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 	{
 		if (ehalo_flag == 1)
 		{
-			//x_out[tid] = tid;
+			// Important:Retrieve the position from eHalo
+			int getHaloPos = ((tid+1) / dim.x)-1;
+			result -= A2[tid] * ehalo[getHaloPos];
+			x_out[tid] = result;
+
 			
 		}
 		
@@ -112,14 +120,19 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 	if (pos.y == 0)//South Halos
 	{
 		
-
 		if (shalo_flag == 1)
 		{
-			//x_out[tid] =tid;
+			// Important:Retrieve the position from sHalo
+			int getRowVal = tid / dim.y;
+			int getHaloPos = getRowVal+( tid % dim.y);
+
+			result -= A1[tid] * shalo[getHaloPos];
+			x_out[tid] = result;
 			
 		}
 				
 	}
+
 	else
 	{
 		result -= A1[tid] * x_in[y0];
@@ -131,7 +144,12 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 		
 		if (nhalo_flag == 1)
 		{
-			//x_out[tid] = tid;
+			// Important:Retrieve the position from sHalo
+			int getRowVal = (tid / dim.y)-(dim.y-1);
+			int getHaloPos = getRowVal+( tid % dim.y);
+
+			result -= A5[tid] * nhalo[getHaloPos];
+			x_out[tid] = result;
 			
 		}
 		
@@ -150,7 +168,64 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 	result -= A6[tid] * x_in[z1];
 	result /= A3[tid];
 
-	//x_out[tid] = result;
+	x_out[tid] = result;
+
+
+	//Populate the halos with new values before exchange
+
+
+	if (pos.x == 0)//west halos
+	{
+		if (whalo_flag == 1)
+		{
+			// Important:Retrieve the position from wHalo
+			int getHaloPos = tid / dim.x;
+			whalo[getHaloPos]=x_out[tid];
+
+		}
+
+	}
+	if (pos.x >= dim.x - 1)//East halos
+	{
+		if (ehalo_flag == 1)
+		{
+			// Important:Retrieve the position from eHalo
+			int getHaloPos = ((tid + 1) / dim.x) - 1;
+			ehalo[getHaloPos]=x_out[tid];
+
+
+		}
+
+	}
+	if (pos.y == 0)//South Halos
+	{
+
+		if (shalo_flag == 1)
+		{
+			// Important:Retrieve the position from sHalo
+			int getRowVal = tid / dim.y;
+			int getHaloPos = getRowVal + (tid % dim.y);
+
+			shalo[getHaloPos]=x_out[tid];
+
+		}
+
+	}
+	if (pos.y >= dim.y - 1)//North halos
+	{
+
+		if (nhalo_flag == 1)
+		{
+			// Important:Retrieve the position from sHalo
+			int getRowVal = (tid / dim.y) - (dim.y - 1);
+			int getHaloPos = getRowVal + (tid % dim.y);
+
+			nhalo[getHaloPos]=x_out[tid];
+
+		}
+
+	}
+	
 
 }
 
