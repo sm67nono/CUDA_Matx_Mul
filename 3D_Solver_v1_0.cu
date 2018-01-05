@@ -53,7 +53,7 @@ struct create_Device
 };
 
 //Simple Jacobi iteration
-__global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, const float *A5, const float *A6, float *x_in, float *x_out, const float *rhs, const int ehalo_flag, const int whalo_flag, const int nhalo_flag, const int shalo_flag, float *ehalo, float *whalo, float *nhalo, float *shalo, const int deviceID, const int numDevices, const int domain_Decom, uint3 dim)
+__global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A2, const float *A3, const float *A4, const float *A5, const float *A6, float *x_in, float *x_out, const float *rhs, const int ehalo_flag, const int whalo_flag, const int nhalo_flag, const int shalo_flag, float *ehalo, float *whalo, float *nhalo, float *shalo, const int deviceID, const int numDevices, const int domain_Decom, uint3 dim, int iteration)
 {
 	unsigned int limit = dim.x * dim.y * dim.z;
 
@@ -108,22 +108,26 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 
 	// Check GPU boundary and use halos for computation
 
-
 	if (pos.x == 0)//west halos
 	{
 		if(whalo_flag==1)
 		{
 			// Important:Retrieve the position from wHalo
 			int getHaloPos = tid / dim.x;
-			result -= A4[tid] * whalo[getHaloPos];
-			x_out[tid] =result;
-			
+			result -= A2[tid] * whalo[getHaloPos];
+
+			//test
+			/*if ((iteration + 1) == 2)
+			{
+				x_out[tid] = whalo[getHaloPos];
+				return;
+			}*/
 		}
 		
 	}
 	else
 	{
-		result -= A4[tid] * x_in[x1];
+		result -= A2[tid] * x_in[x0];
 	}
 	
 	if (pos.x >= dim.x - 1)//East halos
@@ -132,16 +136,19 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 		{
 			// Important:Retrieve the position from eHalo
 			int getHaloPos = ((tid+1) / dim.x)-1;
-			result -= A2[tid] * ehalo[getHaloPos];
-			x_out[tid] = result;
-
-			
+			result -= A4[tid] * ehalo[getHaloPos];
+			//test
+			/*if ((iteration+1) == 2) 
+			{
+				x_out[tid] = ehalo[getHaloPos];
+				return;
+			}*/
 		}
 		
 	}
 	else
 	{
-		result -= A2[tid] * x_in[x0];
+		result -= A4[tid] * x_in[x1];
 	}
 	
 	if (pos.y == 0)//South Halos
@@ -152,9 +159,13 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 			// Important:Retrieve the position from sHalo
 			int getRowVal = tid / dim.y;
 			int getHaloPos = getRowVal+( tid % dim.y);
-
 			result -= A1[tid] * shalo[getHaloPos];
-			x_out[tid] = result;
+			//test
+			/*if ((iteration + 1) == 2)
+			{
+				x_out[tid] = shalo[getHaloPos];
+				return;
+			}*/
 			
 		}
 				
@@ -174,9 +185,14 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 			// Important:Retrieve the position from sHalo
 			int getRowVal = (tid / dim.y)-(dim.y-1);
 			int getHaloPos = getRowVal+( tid % dim.y);
-
 			result -= A5[tid] * nhalo[getHaloPos];
-			x_out[tid] = result;
+
+			//test
+			/*if ((iteration + 1) == 2)
+			{
+				x_out[tid] = nhalo[getHaloPos];
+				return;
+			}*/
 			
 		}
 		
@@ -186,11 +202,8 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 		result -= A5[tid] * x_in[y1];
 	}
 	
-
-	//result -= A4[tid] * x_in[x1];
-	//result -= A2[tid] * x_in[x0];
-	//result -= A1[tid] * x_in[y0];
-	//result -= A5[tid] * x_in[y1];
+	
+	
 	result -= A0[tid] * x_in[z0];
 	result -= A6[tid] * x_in[z1];
 	result /= A3[tid];
@@ -219,7 +232,6 @@ __global__ void jacobi_Simple3D(const float *A0, const float *A1, const float *A
 			// Important:Retrieve the position from eHalo
 			int getHaloPos = ((tid + 1) / dim.x) - 1;
 			ehalo[getHaloPos]=x_out[tid];
-
 
 		}
 
@@ -1329,9 +1341,69 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			}
 
 
-			jacobi_Simple3D <<<grid, block, 0, streams[dev] >>> (d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_A5[dev], d_A6[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim, myDim);
+			jacobi_Simple3D <<<grid, block, 0, streams[dev] >>> (d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_A5[dev], d_A6[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim, myDim, i);
 
 			//cudaMemcpy(&partial_resultOnHost[dev][0], d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost);
+			/* cudaMemcpy(&wHalo_pinned[dev][0], d_whalos[dev], chunk_Y * chunk_Z * sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&eHalo_pinned[dev][0], d_ehalos[dev], chunk_Y * chunk_Z * sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&nHalo_pinned[dev][0], d_nhalos[dev], chunk_X * chunk_Z * sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&sHalo_pinned[dev][0], d_shalos[dev], chunk_X * chunk_Z * sizeof(float), cudaMemcpyDeviceToHost);
+
+
+			//Check Halos after each iteration
+			if(deviceArray[dev].sHalo_flag==1){
+				int SouthHaloSize = chunk_X*chunk_Z;
+				cout <<endl<< "For device :" << dev <<" South Halos are "<<" iteration "<< i+1<< endl;
+				for (int io = SouthHaloSize -1; io >=0; io--) {
+
+				//For one layer x and y
+				if ((io+1) % chunk_X == 0) { cout << std::endl; }
+
+					cout << sHalo_pinned[dev][io] << " ";
+				}
+			}
+
+			//Check Halos after each iteration
+			if (deviceArray[dev].nHalo_flag == 1) {
+				int NorthHaloSize = chunk_X*chunk_Z;
+				cout << endl << "For device :" << dev << " North Halos are " << " iteration " << i + 1 << endl;
+				for (int io = NorthHaloSize - 1; io >= 0; io--) {
+
+					//For one layer x and y
+					if ((io + 1) % chunk_X == 0) { cout << std::endl; }
+
+					cout << nHalo_pinned[dev][io] << " ";
+				}
+			}
+
+			//Check Halos after each iteration
+			if (deviceArray[dev].eHalo_flag == 1) {
+				int EastHaloSize = chunk_Y*chunk_Z;
+				cout << endl << "For device :" << dev << " East Halos are " << " iteration " << i + 1 << endl;
+				for (int io = EastHaloSize - 1; io >= 0; io--) {
+
+					//For one layer x and y
+					if ((io + 1) % chunk_Y == 0) { cout << std::endl; }
+
+					cout << eHalo_pinned[dev][io] << " ";
+				}
+			}
+
+			//Check Halos after each iteration
+			if (deviceArray[dev].wHalo_flag == 1) {
+				int WestHaloSize = chunk_Y*chunk_Z;
+				cout << endl << "For device :" << dev << " West Halos are " << " iteration " << i + 1 << endl;
+				for (int io = WestHaloSize - 1; io >= 0; io--) {
+
+					//For one layer x and y
+					if ((io + 1) % chunk_Y == 0) { cout << std::endl; }
+
+					cout << wHalo_pinned[dev][io] << " ";
+				}
+			} */
+
+
+
 
 
 			//Check the partial result
