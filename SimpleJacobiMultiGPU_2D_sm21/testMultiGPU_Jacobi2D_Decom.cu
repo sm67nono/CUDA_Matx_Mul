@@ -4,7 +4,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "testMultiGPU_Jacobi2D_Decom.cuh"
-#include "multiGPU_topology_optimize.cuh"
+#include "multiGPU_topology_optimize.cuh" 
 #include <iostream>
 #include <chrono>
 #include <memory>
@@ -1394,8 +1394,8 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 		for (int i = 0; i < iterations; i++)
 		{
 			cudaSetDevice(gpuTopology[dev]);
-			//#pragma omp barrier
-
+			
+			#pragma omp barrier
 			if ((i>0))
 			{
 				//As this is not a run on a single host thread race conditions occurs. So have to manage the pointer swapping by creating a copy
@@ -1433,7 +1433,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			}
 
 
-			#pragma omp barrier
+			
 			jacobi_Simple << <grid, block, 0, streams[dev] >> >(d_A0[dev], d_A1[dev], d_A2[dev], d_A3[dev], d_A4[dev], d_Vec_In[dev], d_Vec_Out[dev], d_Rhs[dev], deviceArray[dev].eHalo_flag, deviceArray[dev].wHalo_flag, deviceArray[dev].nHalo_flag, deviceArray[dev].sHalo_flag, d_ehalos[dev], d_whalos[dev], d_nhalos[dev], d_shalos[dev], deviceArray[dev].deviceID, numDevices, decom_Dim, myDim);
 
 			//For Synchronizing while Halo Exchange start
