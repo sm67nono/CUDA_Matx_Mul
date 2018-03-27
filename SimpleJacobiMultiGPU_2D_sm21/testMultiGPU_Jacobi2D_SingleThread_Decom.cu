@@ -637,7 +637,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	//Get the total number of devices
 	int numDevices = -1;
 	cudaGetDeviceCount(&numDevices);
-	numDevices = 1;
+	//numDevices = 1;
 
 
 	cout << endl << "Total number of Devices in the System are :  " << numDevices << endl;
