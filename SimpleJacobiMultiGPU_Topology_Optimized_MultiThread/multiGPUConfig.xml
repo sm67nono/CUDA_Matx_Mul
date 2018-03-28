@@ -1,0 +1,5 @@
+<?xml version="1.0" ?>
+<config>
+	<totalGPUs name="numDevices">4</totalGPUs>
+	<decomposition name="decomposition">1</decomposition>
+</config>
