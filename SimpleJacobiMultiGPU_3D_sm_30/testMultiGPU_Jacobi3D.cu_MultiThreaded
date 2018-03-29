@@ -1316,7 +1316,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	high_resolution_clock::time_point t1 = high_resolution_clock::now();
 
 
-	#pragma omp parallel schedule(dynamic) num_threads(numDevices) 
+	#pragma omp parallel num_threads(numDevices) 
 	{
 		int dev = omp_get_thread_num();
 		//cout << "Device set is" << dev << endl;
