@@ -469,7 +469,7 @@ void createTopology(int numDevices, vector<create_Device> &deviceArray, int numb
 //Init Halos: In 1D decomposition only North and South Halos are used. In 2D decomposition North, South, East and West Halo need to be initialized and computed
 //TODO:Create a Halo Exchange Mechanism for 2D Multi GPU topology
 
-void initHalos3D(create_Device &device, int chunk_X, int chunk_Y, int chunk_Z, float *vec_in, int maxdevicesAlong_X, int maxDevicesAlong_Y, int rowStartPos, int rowEndPos, int dim)
+void initHalos3D(create_Device &device, unsigned int chunk_X, unsigned int chunk_Y, unsigned int chunk_Z, float *vec_in, int maxdevicesAlong_X, int maxDevicesAlong_Y, int rowStartPos, int rowEndPos, int dim)
 {
 
 	/*cout << endl << "Inside Halo Computation 2D. printing Details";
@@ -777,7 +777,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	}
 
 
-	int size = dim * dim * dim; //For x,y,z
+	unsigned int size = dim * dim * dim; //For x,y,z
 
 	//auto result = make_unique<float[]>(size);
 
@@ -798,7 +798,10 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	//Get the total number of devices
 	int numDevices = -1;
 	cudaGetDeviceCount(&numDevices);
+	//Testing with 1,2 and 4 devices manually
 	//numDevices = 2;
+
+
 
 
 	cout << endl << "Total number of Devices in the System are :  " << numDevices << endl;
@@ -923,9 +926,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 	}
 
-
-
-
 	for (int dev = 0; dev < numDevices; dev++)
 	{
 		//Setting the device before allocation
@@ -973,7 +973,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 		//Create Partial Diagonal Vectors
 		//Size per GPU will be
-		int chunkSize = chunk_X * chunk_Y * chunk_Z; //Should be same as domaindivision[dev]
+		unsigned int chunkSize = chunk_X * chunk_Y * chunk_Z; //Should be same as domaindivision[dev]
 		std::vector<float> partial_a0(chunkSize);
 		std::vector<float> partial_a1(chunkSize);
 		std::vector<float> partial_a2(chunkSize);
@@ -1017,34 +1017,34 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			//numberOfDevicesAlong_X * Chunk_X * Chunk_Y : finds out the  total data per row of GPUs allocated
 			//int dataStartPos_X = (devicePosX * numberOfDevicesAlong_X * chunk_X * chunk_Y) + (devicePosY * chunk_X);
 
-			int dataStartPos_X = (devicePosY * dim * chunk_Y) + (devicePosX * chunk_X); //Important: here dim refers to y dimension of data
-			int dataEndPos_X = dataStartPos_X + chunk_X;
+			unsigned int dataStartPos_X = (devicePosY * dim * chunk_Y) + (devicePosX * chunk_X); //Important: here dim refers to y dimension of data
+			unsigned int dataEndPos_X = dataStartPos_X + chunk_X;
 
 
 			//cout << endl << "Data Start Pos is " << dataStartPos_X << endl;
 			//cout << endl << "Data End Pos is " << dataEndPos_X << endl;
 
 			//One complete row across all GPU is dim in order to get the next element above an element we add (currentPosition + dim )
-			int rowStartPos = dataStartPos_X;
-			int rowEndPos = dataEndPos_X;
-			int indexCounter = 0;
+			unsigned int rowStartPos = dataStartPos_X;
+			unsigned int rowEndPos = dataEndPos_X;
+			unsigned int indexCounter = 0;
 			//Initialize Halos
 			initHalos3D(deviceArray[dev], chunk_X, chunk_Y, chunk_Z, &vec_in[0], numberOfDevicesAlong_X, numberOfDevicesAlong_Y, rowStartPos, rowEndPos - 1, dim);
 
 			//Added for 3D
 			//cout << "For the device ============================================="<<dev<<endl;
-			for (int along_Z = 0; along_Z < chunk_Z; along_Z++)
+			for (unsigned int along_Z = 0; along_Z < chunk_Z; along_Z++)
 			{
 				//Important: dim_x . dim_y would provide the next datastart position along z
 				rowStartPos = dataStartPos_X + (along_Z * dim * dim);
 				rowEndPos = rowStartPos + chunk_X;
 
-				for (int rowNum = 0; rowNum < chunk_Y; rowNum++)
+				for (unsigned int rowNum = 0; rowNum < chunk_Y; rowNum++)
 				{
 					//cout << endl << "Data Start Pos is " << rowStartPos << endl;
 					//cout << endl << "Data End Pos is " << rowEndPos-1 << endl;
 					//Get one complete row for the GPU
-					for (int pos = rowStartPos; pos < rowEndPos; pos++)
+					for (unsigned int pos = rowStartPos; pos < rowEndPos; pos++)
 					{
 						partial_a0[indexCounter] = a0[pos];
 						partial_a1[indexCounter] = a1[pos];
@@ -1317,7 +1317,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 
 
-	for (int i = 0; i < iterations; i++)
+	for (int i = 0; i <= iterations; i++)
 	{
 
 		//cout << endl << endl << "Iteration : " << i + 1 << endl << endl << endl;
@@ -1476,11 +1476,6 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 			cudaSetDevice(dev);
 
 
-			if (i == (iterations - 1))//Copy the results just for the final iteration
-			{
-				cudaMemcpyAsync(&partial_resultOnHost[dev][0], d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost, streams[dev]);
-				continue;
-			}
 
 			swap(d_Vec_In[dev], d_Vec_Out[dev]);
 
@@ -1725,10 +1720,35 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 
 
 	}
+	for (int dev = 0; dev < numDevices; dev++)
+	{
+		cudaSetDevice(dev);
+		cudaDeviceSynchronize();
+	}
 
 	high_resolution_clock::time_point t2 = high_resolution_clock::now();
 
 	auto duration = duration_cast<microseconds>(t2 - t1).count();
+
+
+
+
+
+	//Copying the final results
+
+
+	for (int dev = 0; dev < numDevices; dev++)
+	{
+		//cudaSetDevice(dev);
+
+		cudaMemcpyAsync(&partial_resultOnHost[dev][0], d_Vec_Out[dev], domainDivision[dev] * sizeof(float), cudaMemcpyDeviceToHost, streams[dev]);
+
+	}
+
+
+
+
+
 
 
 	if (auto err = cudaGetLastError())
@@ -1778,7 +1798,7 @@ cudaError_t performMultiGPUJacobi(unsigned int val_dim, unsigned int numJacobiIt
 	//Results copied to disk
 	for (int dev = 0; dev < numDevices; dev++)
 	{
-		//sendToPrint(&partial_resultOnHost[dev][0], deviceArray[dev].devicePosition_X, deviceArray[dev].devicePosition_Y, numberOfDevicesAlong_X, chunk_X, chunk_Y, chunk_Z, dim, size, result, numDevices, iterations - 1, iterations);
+		sendToPrint(&partial_resultOnHost[dev][0], deviceArray[dev].devicePosition_X, deviceArray[dev].devicePosition_Y, numberOfDevicesAlong_X, chunk_X, chunk_Y, chunk_Z, dim, size, result, numDevices, iterations - 1, iterations);
 	}
 
 	//==========================================Performance using CUDA stream ends===========================================================================
